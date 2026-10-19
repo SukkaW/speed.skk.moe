@@ -2,6 +2,7 @@
 import { noop } from 'foxts/noop';
 import { wait } from 'foxts/wait';
 import { SAMPLE_INTERVAL, estimate, shouldStop, sustained } from './stability';
+import type { Target } from './targets';
 
 export type ThreadMode = 'single' | 'multi';
 export type Phase = 'idle' | 'latency' | 'download' | 'upload' | 'done';
@@ -48,26 +49,14 @@ export const IDLE: SpeedtestState = {
   traffic: { download: 0, upload: 0 }
 };
 
-// Served as an image so the CDN never brotli-compresses it on the fly, which would cap throughput.
-const OBJECT_PATH = '/redacted/object';
-const PRIMARY = 'https://redacted-mirror-1.invalid';
-// Each host is its own HTTP/2 connection, so multi-thread spreads across mirrors instead of
-// multiplexing onto one connection's congestion window.
-const MIRRORS = [
-  PRIMARY,
-  'https://redacted-mirror-2.invalid',
-  'https://redacted-mirror-3.invalid',
-  'https://redacted-mirror-4.invalid',
-  'https://redacted-mirror-5.invalid'
-];
+// Nothing identifies the page to the hosts, and a missing CORS header fails loudly instead of
+// yielding an opaque response whose body cannot be read.
+const FETCH_INIT = { mode: 'cors', referrerPolicy: 'no-referrer', cache: 'no-store' } as const satisfies RequestInit;
 
-// Idle pings run back to back: at least MIN, at most MAX, stopping once the budget is spent.
 /** Concurrent transfers per host, multiplexed on its single HTTP/2 connection. */
 const REQUESTS_PER_HOST = 3;
 /** Share of a body received before the next request is issued, so first-byte waits overlap transfers. */
 const PREFETCH_AT = 0.5;
-/** Accepts and discards POST bodies. Served over HTTP/1.1, so every stream is its own TCP connection. */
-const UPLOAD_URL = 'https://redacted-upload.invalid/sink';
 const UPLOAD_STREAMS = 3;
 // Each POST is timed to the server's reply, the only signal that the bytes actually left: a proxy
 // or TUN in front of the browser accepts a body at memory speed, so upload progress events only
@@ -77,6 +66,7 @@ const UPLOAD_FIRST_BYTES = 256 * 1024;
 const UPLOAD_MAX_BYTES = 32 * 1024 * 1024;
 /** Seconds. */
 const UPLOAD_TARGET = 1;
+// Idle pings run back to back: at least MIN, at most MAX, stopping once the budget is spent.
 const LATENCY_PINGS_MIN = 8;
 const LATENCY_PINGS_MAX = 20;
 /** ms. */
@@ -121,12 +111,12 @@ async function discard(body: ReadableStream<Uint8Array> | null) {
   }
 }
 
-/** Round trip to the primary edge: time to first byte of a one-byte range request. */
-async function ping(signal: AbortSignal): Promise<number> {
-  // The host ignores the query string; it only makes the Resource Timing entry addressable.
-  const url = `${PRIMARY}${OBJECT_PATH}?ping=${performance.now().toFixed(3)}`;
+/** Round trip to the ping host: time to first byte of a one-byte range request. */
+async function ping(target: string, signal: AbortSignal): Promise<number> {
+  // The hosts ignore the query string; it only makes the Resource Timing entry addressable.
+  const url = `${target}?ping=${performance.now().toFixed(3)}`;
   const started = performance.now();
-  const response = await fetch(url, { cache: 'no-store', headers: { Range: 'bytes=0-0' }, signal });
+  const response = await fetch(url, { ...FETCH_INIT, headers: { Range: 'bytes=0-0' }, signal });
   const headersAt = performance.now();
   // Headers are what we time; on a loaded connection the body can sit behind bulk data frames.
   await discard(response.body);
@@ -149,7 +139,7 @@ function openReader(body: ReadableStream<Uint8Array> | null) {
  */
 async function pump(url: string, signal: AbortSignal, meter: Meter) {
   const request = () => {
-    const started = fetch(url, { cache: 'no-store', signal });
+    const started = fetch(url, { ...FETCH_INIT, signal });
     // Awaited later; this only keeps an early rejection from surfacing as unhandled.
     started.catch(noop);
     return started;
@@ -189,7 +179,7 @@ async function push(url: string, signal: AbortSignal, meter: Meter) {
   for (;;) {
     try {
       const started = performance.now();
-      const response = await fetch(url, { method: 'POST', body: new Uint8Array(bytes), cache: 'no-store', signal });
+      const response = await fetch(url, { ...FETCH_INIT, method: 'POST', body: new Uint8Array(bytes), signal });
       const seconds = (performance.now() - started) / 1000;
       await discard(response.body);
       if (!response.ok) throw new Error(`Upload rejected: ${response.status}`);
@@ -221,7 +211,7 @@ interface Outcome {
 type Progress = (live: number, loaded: number | null, samples: number[], bytes: number) => void;
 
 /** Runs the pumps until the stability rule fires, sampling throughput and pinging under load. */
-async function measure(pumps: readonly Pump[], signal: AbortSignal, onProgress: Progress): Promise<Outcome> {
+async function measure(pumps: readonly Pump[], pingTarget: string, signal: AbortSignal, onProgress: Progress): Promise<Outcome> {
   const phase = new AbortController();
   const stop = () => phase.abort();
   signal.addEventListener('abort', stop, { once: true });
@@ -256,7 +246,7 @@ async function measure(pumps: readonly Pump[], signal: AbortSignal, onProgress: 
       await wait(LOADED_PING_INTERVAL);
       if (pingsOver()) return;
       try {
-        const ms = await ping(pings.signal);
+        const ms = await ping(pingTarget, pings.signal);
         loadedPings.push(ms);
         shownLoaded = shownLoaded === null ? ms : smooth(shownLoaded, ms);
       } catch {
@@ -313,7 +303,7 @@ async function measure(pumps: readonly Pump[], signal: AbortSignal, onProgress: 
  * Runs the full test, publishing state as it goes. Rejects with an AbortError when the
  * signal fires; nothing is published after that.
  */
-export async function runSpeedtest(mode: ThreadMode, signal: AbortSignal, onState: (state: SpeedtestState) => void): Promise<void> {
+export async function runSpeedtest(mode: ThreadMode, target: Target, signal: AbortSignal, onState: (state: SpeedtestState) => void): Promise<void> {
   let state: SpeedtestState = { ...IDLE, phase: 'latency' };
   const publish = (patch: Partial<SpeedtestState>) => {
     if (signal.aborted) return;
@@ -323,24 +313,24 @@ export async function runSpeedtest(mode: ThreadMode, signal: AbortSignal, onStat
 
   performance.clearResourceTimings();
   // The first ping opens the connection and is discarded.
-  await ping(signal);
+  await ping(target.ping, signal);
   const pings: number[] = [];
   const budgetEnds = performance.now() + LATENCY_BUDGET;
   while (pings.length < LATENCY_PINGS_MAX && (pings.length < LATENCY_PINGS_MIN || performance.now() < budgetEnds)) {
-    const ms = await ping(signal);
+    const ms = await ping(target.ping, signal);
     pings.push(ms);
     publish({ phase: 'latency', live: ms });
   }
   publish({ results: { ...state.results, latency: median(pings), jitter: meanAbsoluteDelta(pings) } });
 
   const downloadPumps: Pump[] = [];
-  const hosts = mode === 'multi' ? MIRRORS : [PRIMARY];
-  for (let h = 0, len = hosts.length; h < len; h++) {
+  const objects = mode === 'multi' ? target.download : target.download.slice(0, 1);
+  for (let h = 0, len = objects.length; h < len; h++) {
     for (let i = 0; i < REQUESTS_PER_HOST; i++) {
-      downloadPumps.push((phaseSignal, meter) => pump(`${hosts[h]}${OBJECT_PATH}`, phaseSignal, meter));
+      downloadPumps.push((phaseSignal, meter) => pump(objects[h], phaseSignal, meter));
     }
   }
-  const download = await measure(downloadPumps, signal, (live, loaded, samples, bytes) => {
+  const download = await measure(downloadPumps, target.ping, signal, (live, loaded, samples, bytes) => {
     publish({
       phase: 'download',
       live,
@@ -351,22 +341,26 @@ export async function runSpeedtest(mode: ThreadMode, signal: AbortSignal, onStat
   });
   publish({ results: { ...state.results, download: download.mbps } });
 
-  const uploadPumps: Pump[] = [];
-  for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
-    uploadPumps.push((phaseSignal, meter) => push(UPLOAD_URL, phaseSignal, meter));
-  }
-  const upload = await measure(uploadPumps, signal, (live, loaded, samples, bytes) => {
-    publish({
-      phase: 'upload',
-      live,
-      loaded,
-      trend: { ...state.trend, upload: samples },
-      traffic: { ...state.traffic, upload: bytes }
+  let upload: Outcome | null = null;
+  if (target.upload !== null) {
+    const sink = target.upload;
+    const uploadPumps: Pump[] = [];
+    for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
+      uploadPumps.push((phaseSignal, meter) => push(sink, phaseSignal, meter));
+    }
+    upload = await measure(uploadPumps, target.ping, signal, (live, loaded, samples, bytes) => {
+      publish({
+        phase: 'upload',
+        live,
+        loaded,
+        trend: { ...state.trend, upload: samples },
+        traffic: { ...state.traffic, upload: bytes }
+      });
     });
-  });
-  publish({ phase: 'done', live: 0, loaded: null, results: { ...state.results, upload: upload.mbps } });
+  }
+  publish({ phase: 'done', live: 0, loaded: null, results: { ...state.results, upload: upload?.mbps ?? null } });
 
   // Loaded latencies may still be waiting on one ping each; they fill in without holding up the result.
-  const [downloadLatency, uploadLatency] = await Promise.all([download.loadedLatency, upload.loadedLatency]);
+  const [downloadLatency, uploadLatency] = await Promise.all([download.loadedLatency, upload?.loadedLatency ?? null]);
   publish({ results: { ...state.results, downloadLatency, uploadLatency } });
 }

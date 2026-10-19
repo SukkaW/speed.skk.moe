@@ -1,17 +1,18 @@
 'use client';
 
 import * as stylex from '@stylexjs/stylex';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Button } from '@base-ui/react/button';
 import { Switch } from '@base-ui/react/switch';
 import { Play, RotateCw, Square } from 'lucide-react';
 import { stringJoin } from 'foxts/string-join';
 import { prettyBandwidth, prettyTraffic } from 'xbits';
+import { RegionMenu } from './region-menu';
 import { TrendChart } from './trend-chart';
 import { colors, fonts } from './tokens.stylex';
 import { useGeo } from './use-geo';
 import { TREND_SAMPLES, useSpeedtest } from './use-speedtest';
-import type { ThreadMode } from './use-speedtest';
+import type { Region, ThreadMode } from './use-speedtest';
 
 const wholeNumber = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const oneDecimal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -44,7 +45,12 @@ const styles = stylex.create({
     rowGap: { default: 16, [MOBILE]: 12, [LARGE]: 20 },
     marginBottom: { default: 4, [LARGE]: 8 }
   },
-  menu: { marginLeft: 'auto' },
+  menu: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto'
+  },
   // Quarters line up with the four stat cards below; phones go two-up.
   toolbar: {
     display: 'grid',
@@ -145,7 +151,8 @@ const styles = stylex.create({
     fontFamily: 'inherit',
     fontSize: { default: 15, [LARGE]: 17 },
     fontWeight: 500,
-    cursor: 'pointer',
+    cursor: { default: 'pointer', ':disabled': 'default' },
+    opacity: { default: 1, ':disabled': 0.55 },
     outlineStyle: { default: 'none', ':focus-visible': 'solid' },
     outlineWidth: 2,
     outlineColor: colors.ink,
@@ -171,8 +178,12 @@ const styles = stylex.create({
   },
   direction: {
     display: 'grid',
-    gap: { default: 12, [MOBILE]: 10, [LARGE]: 16 }
+    gap: { default: 12, [MOBILE]: 10, [LARGE]: 16 },
+    transitionProperty: 'opacity',
+    transitionDuration: '150ms'
   },
+  // The direction has no endpoint in the chosen region; the cards stay so the layout does not shift.
+  directionMuted: { opacity: 0.45 },
   panel: {
     display: 'flex',
     flexDirection: 'column',
@@ -264,15 +275,22 @@ const styles = stylex.create({
     color: colors.inkMuted
   },
   empty: { color: colors.inkFaint },
+  // Each item starts from the width its text needs and the leftover is shared out, so the row is
+  // always filled; when IP and location leave no room, the whole provider item wraps to a second
+  // line rather than any value being squeezed.
   info: {
-    display: 'grid',
-    gridTemplateColumns: {
-      default: 'minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr)',
-      [MOBILE]: 'minmax(0, 1fr)'
-    },
-    gap: { default: 12, [MOBILE]: 8, [LARGE]: 16 },
+    display: 'flex',
+    flexWrap: 'wrap',
+    flexDirection: { default: 'row', [MOBILE]: 'column' },
+    columnGap: { default: 32, [LARGE]: 48 },
+    rowGap: { default: 12, [MOBILE]: 8, [LARGE]: 16 },
     paddingInline: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
     paddingTop: { default: 8, [MOBILE]: 4, [LARGE]: 12 }
+  },
+  infoItem: {
+    flexGrow: 1,
+    flexBasis: 'auto',
+    maxWidth: '100%'
   },
   infoLabel: {
     fontSize: { default: 13, [LARGE]: 14 },
@@ -286,7 +304,22 @@ const styles = stylex.create({
     fontWeight: 500,
     lineHeight: 1.3,
     color: colors.ink,
-    fontVariantNumeric: 'tabular-nums'
+    fontVariantNumeric: 'tabular-nums',
+    overflowWrap: 'anywhere'
+  },
+  footnote: {
+    paddingInline: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
+    fontSize: { default: 13, [LARGE]: 14 },
+    lineHeight: 1.3,
+    color: colors.inkMuted
+  },
+  footnoteLink: {
+    color: colors.ink,
+    textDecorationLine: 'underline',
+    textDecorationColor: { default: colors.line, ':hover': colors.ink },
+    textUnderlineOffset: 3,
+    transitionProperty: 'text-decoration-color',
+    transitionDuration: '150ms'
   }
 });
 
@@ -298,8 +331,11 @@ interface SpeedtestProps {
 
 export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
   const [mode, setMode] = useState<ThreadMode>('multi');
-  const { phase, live, loaded, results, trend, traffic, start, stop } = useSpeedtest(mode);
-  const { data: geo } = useGeo();
+  const [regionChoice, setRegionChoice] = useState<Region | null>(null);
+  const { data: geo, isLoading: locating } = useGeo();
+  // A manual pick always wins; otherwise the lookup decides, Global until it has answered.
+  const region = regionChoice ?? (geo?.country_code === 'CN' ? 'china' : 'global');
+  const { phase, live, loaded, results, trend, traffic, start, stop } = useSpeedtest(mode, region);
   const running = phase !== 'idle' && phase !== 'done';
   const downloaded = splitUnit(prettyTraffic(traffic.download));
   const uploaded = splitUnit(prettyTraffic(traffic.upload));
@@ -308,9 +344,13 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
     <div {...stylex.props(styles.grid)}>
       <header {...stylex.props(styles.header)}>
         <div>{wordmark}</div>
-        <div {...stylex.props(styles.menu)}>{appearance}</div>
+        <div {...stylex.props(styles.menu)}>
+          <RegionMenu value={region} onValueChange={setRegionChoice} disabled={running} />
+          {appearance}
+        </div>
         <div {...stylex.props(styles.toolbar)}>
           <Button
+            disabled={locating}
             onClick={running ? stop : start}
             {...stylex.props(styles.button, running && styles.buttonQuiet)}
           >
@@ -393,7 +433,7 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
             <Stat label="Downloaded" value={downloaded.value} unit={downloaded.unit} />
           </dl>
         </section>
-        <section {...stylex.props(styles.direction)}>
+        <section {...stylex.props(styles.direction, region === 'china' && styles.directionMuted)}>
           <Panel
             direction="upload"
             label="Upload"
@@ -408,10 +448,16 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
       </div>
 
       <dl {...stylex.props(styles.info)}>
-        <Info label="IP address" value={geo?.ip} />
+        <Info label="IP address" value={geo && <Address ip={geo.ip} />} />
         <Info label="Location" value={geo && stringJoin([geo.city || geo.region, geo.country], ', ')} />
         <Info label="Provider" value={geo?.isp} />
       </dl>
+      <p {...stylex.props(styles.footnote)}>
+        Learn more about your IP at
+        {' '}
+        {/* eslint-disable-next-line @eslint-react/dom-no-unsafe-target-blank -- our own site; the referrer is wanted */}
+        <a href="https://ip.skk.moe" target="_blank" {...stylex.props(styles.footnoteLink)}>ip.skk.moe</a>
+      </p>
     </div>
   );
 }
@@ -467,9 +513,21 @@ function Stat({ label, value, unit, compact }: StatProps) {
   );
 }
 
-function Info({ label, value }: { label: string, value: string | undefined }) {
+/** An IPv6 address may wrap, but only between groups; copying still yields the plain address. */
+function Address({ ip }: { ip: string }) {
+  const groups = ip.split(':');
+  return groups.map((group, i) => (
+    // eslint-disable-next-line @eslint-react/no-array-index-key -- groups are positional and the address is static
+    <Fragment key={i}>
+      {i > 0 && <>:<wbr /></>}
+      {group}
+    </Fragment>
+  ));
+}
+
+function Info({ label, value }: { label: string, value: React.ReactNode }) {
   return (
-    <div>
+    <div {...stylex.props(styles.infoItem)}>
       <dt {...stylex.props(styles.infoLabel)}>{label}</dt>
       <dd {...stylex.props(styles.infoValue, !value && styles.empty)}>{value || '—'}</dd>
     </div>

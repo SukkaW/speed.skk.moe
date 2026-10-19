@@ -20,7 +20,7 @@ const GEO_URL = '/_sukka/api/geo';
 
 // Only the deployed site has the Snippet in front of it; the dev server answers with this instead.
 const SAMPLE: Geo = {
-  ip: '203.0.113.42',
+  ip: '2001:db8:85a3:8d3:1319:8a2e:370:7348',
   country: 'Japan',
   country_code: 'JP',
   region: 'Tokyo',
@@ -28,9 +28,9 @@ const SAMPLE: Geo = {
   timezone: 'Asia/Tokyo',
   latitude: 35.6938,
   longitude: 139.7536,
-  isp: 'Example Networks',
-  organization: 'Example Networks',
-  asn_organization: 'Example Networks',
+  isp: 'Japan Nation-wide Network of Softbank Corp.',
+  organization: 'Japan Nation-wide Network of Softbank Corp.',
+  asn_organization: 'Japan Nation-wide Network of Softbank Corp.',
   asn: 64496
 };
 
