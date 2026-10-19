@@ -25,8 +25,8 @@ const styles = stylex.create({
   }
 });
 
-const SITE_NAME = 'speed.skk.moe';
-const DESCRIPTION = 'Test your download speed, upload speed and latency.';
+const SITE_NAME = 'Speedtest | Sukka';
+const DESCRIPTION = 'Test your download speed, upload speed and latency. Made by Sukka (https://skk.moe)';
 
 const jsonLd: WithContext<WebApplication> = {
   '@context': 'https://schema.org',
@@ -57,8 +57,6 @@ export const metadata: Metadata = {
   title: SITE_NAME,
   description: DESCRIPTION,
   applicationName: SITE_NAME,
-  authors: [{ name: 'Sukka', url: 'https://skk.moe' }],
-  creator: 'Sukka',
   icons: {
     shortcut: {
       type: 'image/ico',
