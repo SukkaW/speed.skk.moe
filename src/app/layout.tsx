@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import type { WebApplication, WithContext } from 'schema-dts';
 import { Barlow, Barlow_Semi_Condensed } from 'next/font/google';
 import * as stylex from '@stylexjs/stylex';
 import { stylexPropsWithClassName } from 'stylex-webpack/utils';
@@ -6,7 +7,6 @@ import 'minireset.css';
 import './globals.css';
 import 'stylex-webpack/stylex.css';
 import { colors, fonts } from './tokens.stylex';
-import { THEME_COLOR } from './theme';
 import { ThemeScript } from './theme-script';
 import { ColorSchemeProvider } from './color-scheme-provider';
 
@@ -25,20 +25,122 @@ const styles = stylex.create({
   }
 });
 
+const SITE_NAME = 'speed.skk.moe';
+const DESCRIPTION = 'Test your download speed, upload speed and latency.';
+
+const jsonLd: WithContext<WebApplication> = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  name: SITE_NAME,
+  url: 'https://speed.skk.moe/',
+  description: DESCRIPTION,
+  image: 'https://cdn.skk.moe/favicon/android-chrome-512x512.png',
+  applicationCategory: 'UtilitiesApplication',
+  operatingSystem: 'Any',
+  browserRequirements: 'Requires JavaScript',
+  isAccessibleForFree: true,
+  author: {
+    '@type': 'Person',
+    name: 'Sukka',
+    url: 'https://skk.moe'
+  }
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover'
+};
+
 export const metadata: Metadata = {
-  title: 'speed.skk.moe',
-  description: 'Test your download speed, upload speed and latency.'
+  metadataBase: new URL('https://speed.skk.moe'),
+  title: SITE_NAME,
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: 'Sukka', url: 'https://skk.moe' }],
+  creator: 'Sukka',
+  icons: {
+    shortcut: {
+      type: 'image/ico',
+      url: 'https://cdn.skk.moe/favicon.ico'
+    },
+    icon: [
+      {
+        type: 'image/ico',
+        sizes: 'any',
+        rel: 'icon',
+        url: 'https://cdn.skk.moe/favicon.ico'
+      },
+      {
+        type: 'image/svg+xml',
+        rel: 'icon',
+        url: 'https://cdn.skk.moe/avatar/sketch-rounded.svg'
+      },
+      {
+        type: 'image/png',
+        sizes: '512x512',
+        rel: 'icon',
+        url: 'https://cdn.skk.moe/favicon/android-chrome-512x512.png'
+      },
+      {
+        type: 'image/png',
+        sizes: '192x192',
+        rel: 'icon',
+        url: 'https://cdn.skk.moe/favicon/android-chrome-192x192.png'
+      }
+    ],
+    apple: {
+      type: 'image/png',
+      sizes: '180x180',
+      url: 'https://cdn.skk.moe/favicon/apple-touch-icon.png'
+    }
+  },
+  formatDetection: {
+    telephone: false
+  },
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: 'default'
+  },
+  openGraph: {
+    type: 'website',
+    url: 'https://speed.skk.moe/',
+    title: SITE_NAME,
+    siteName: SITE_NAME,
+    description: DESCRIPTION,
+    images: {
+      url: 'https://cdn.skk.moe/favicon/android-chrome-512x512.png',
+      width: 512,
+      height: 512
+    }
+  },
+  twitter: {
+    card: 'summary',
+    site: '@isukkaw',
+    creator: '@isukkaw'
+  },
+  robots: {
+    'max-snippet': -1,
+    'max-image-preview': 'large',
+    'max-video-preview': -1
+  },
+  other: {
+    'fediverse:creator': '@sukka@acg.mn'
+  }
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="en" suppressHydrationWarning {...stylexPropsWithClassName(stylex.props(styles.html), barlow.variable, barlowSemiCondensed.variable)}>
-      <head>
-        <meta name="theme-color" content={THEME_COLOR.light} />
-      </head>
       <body suppressHydrationWarning {...stylex.props(styles.body)}>
         <ThemeScript />
         <ColorSchemeProvider>{children}</ColorSchemeProvider>
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- json ld
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
       </body>
     </html>
   );

@@ -227,6 +227,9 @@ importers:
       eslint-formatter-sukka:
         specifier: ^9.2.0
         version: 9.2.0(eslint@10.13.0(supports-color@8.1.1))
+      schema-dts:
+        specifier: ^2.1.0
+        version: 2.1.0
       stylex-webpack:
         specifier: ^0.5.0
         version: 0.5.0(@stylexjs/babel-plugin@0.19.1(supports-color@8.1.1))(@stylexjs/stylex@0.19.1)(postcss@8.5.23)(sharp@0.35.5(@types/node@20.19.43))
@@ -1874,6 +1877,13 @@ packages:
 
   scheduler@0.28.0:
     resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
+
+  schema-dts-lib@1.1.0:
+    resolution: {integrity: sha512-Nx00FDPHDimSENMznVpADeYUJDsqlMiO9wcs2S+giggNTm5+ruNkM4m9z9qCk6xUJT+ThDM3NxxpwfHfFk1G+Q==}
+    engines: {node: '>=14.0.0'}
+
+  schema-dts@2.1.0:
+    resolution: {integrity: sha512-Y/NvOvuJUZwrm+EmNqJF3M+bRufERJs1h5GJPLilUuK5D5b53ttU+XZgIjEFaAVRToh+ib+cQawFmxKC5Jt9ow==}
 
   schema-utils@4.8.1:
     resolution: {integrity: sha512-x39pYlJPyH7Uge5QO64B9XGP9zLDc9WNmiQZc+CE3IzZPvMu3lHOuAMGpYNoPixEL7MSWlGhYTg5UlLSL8G6iw==}
@@ -3719,6 +3729,12 @@ snapshots:
       queue-microtask: 1.2.3
 
   scheduler@0.28.0: {}
+
+  schema-dts-lib@1.1.0: {}
+
+  schema-dts@2.1.0:
+    dependencies:
+      schema-dts-lib: 1.1.0
 
   schema-utils@4.8.1(webpack@5.112.0(postcss@8.5.23)(sharp@0.35.5(@types/node@20.19.43))):
     dependencies:
