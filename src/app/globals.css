@@ -1,0 +1,22 @@
+:root {
+  color-scheme: light dark;
+}
+
+:root.light {
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
+}
+
+/* The appearance trigger renders all three glyphs; the <html> class picks the visible one */
+[data-theme-icon] {
+  display: none;
+}
+
+:root:not(.light):not(.dark) [data-theme-icon="system"],
+:root.light [data-theme-icon="light"],
+:root.dark [data-theme-icon="dark"] {
+  display: block;
+}
