@@ -4,7 +4,8 @@ import * as stylex from '@stylexjs/stylex';
 import { Fragment, useState } from 'react';
 import { Button } from '@base-ui/react/button';
 import { Switch } from '@base-ui/react/switch';
-import { Play, RotateCw, Square } from 'lucide-react';
+import { Toggle } from '@base-ui/react/toggle';
+import { Eye, EyeOff, Play, RotateCw, Square } from 'lucide-react';
 import { stringJoin } from 'foxts/string-join';
 import { prettyBandwidth, prettyTraffic } from 'xbits';
 import { RegionMenu } from './region-menu';
@@ -275,6 +276,14 @@ const styles = stylex.create({
     color: colors.inkMuted
   },
   empty: { color: colors.inkFaint },
+  infoCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: { default: 14, [MOBILE]: 12, [LARGE]: 18 },
+    padding: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
+    borderRadius: { default: 16, [LARGE]: 20 },
+    backgroundColor: colors.raised
+  },
   // Each item starts from the width its text needs and the leftover is shared out, so the row is
   // always filled; when IP and location leave no room, the whole provider item wraps to a second
   // line rather than any value being squeezed.
@@ -283,9 +292,7 @@ const styles = stylex.create({
     flexWrap: 'wrap',
     flexDirection: { default: 'row', [MOBILE]: 'column' },
     columnGap: { default: 32, [LARGE]: 48 },
-    rowGap: { default: 12, [MOBILE]: 8, [LARGE]: 16 },
-    paddingInline: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
-    paddingTop: { default: 8, [MOBILE]: 4, [LARGE]: 12 }
+    rowGap: { default: 12, [MOBILE]: 8, [LARGE]: 16 }
   },
   infoItem: {
     flexGrow: 1,
@@ -308,7 +315,15 @@ const styles = stylex.create({
     overflowWrap: 'anywhere'
   },
   footnote: {
-    paddingInline: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingTop: { default: 12, [MOBILE]: 10, [LARGE]: 14 },
+    borderTopWidth: 1,
+    borderTopStyle: 'solid',
+    borderTopColor: `color-mix(in srgb, ${colors.line} 50%, transparent)`,
     fontSize: { default: 13, [LARGE]: 14 },
     lineHeight: 1.3,
     color: colors.inkMuted
@@ -320,8 +335,51 @@ const styles = stylex.create({
     textUnderlineOffset: 3,
     transitionProperty: 'text-decoration-color',
     transitionDuration: '150ms'
+  },
+  privacyToggle: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    height: 28,
+    paddingInline: 10,
+    borderRadius: 8,
+    borderStyle: 'none',
+    boxShadow: `inset 0 0 0 1px ${colors.line}`,
+    backgroundColor: { default: 'transparent', ':hover': colors.control },
+    color: { default: colors.inkMuted, ':hover': colors.ink },
+    fontFamily: 'inherit',
+    fontSize: 'inherit',
+    fontWeight: 500,
+    cursor: 'pointer',
+    outlineStyle: { default: 'none', ':focus-visible': 'solid' },
+    outlineWidth: 2,
+    outlineColor: colors.ink,
+    outlineOffset: 2,
+    transitionProperty: 'background-color, color',
+    transitionDuration: '150ms'
+  },
+  hidden: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    height: 22,
+    paddingInline: 8,
+    borderRadius: 999,
+    backgroundColor: colors.control,
+    color: colors.inkMuted,
+    fontSize: 12,
+    fontWeight: 500,
+    verticalAlign: 'middle'
   }
 });
+
+/** Stands in for a masked value so a screenshot reads as deliberate redaction. */
+const hiddenJsx = (
+  <span {...stylex.props(styles.hidden)}>
+    <EyeOff size={12} strokeWidth={1.8} aria-hidden />
+    Hidden
+  </span>
+);
 
 interface SpeedtestProps {
   /** Server-rendered wordmark and appearance menu, placed in the header row. */
@@ -332,6 +390,8 @@ interface SpeedtestProps {
 export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
   const [mode, setMode] = useState<ThreadMode>('multi');
   const [regionChoice, setRegionChoice] = useState<Region | null>(null);
+  // Screenshot mode: personal details are masked and the location drops to the country.
+  const [redacted, setRedacted] = useState(false);
   const { data: geo, isLoading: locating } = useGeo();
   // A manual pick always wins; otherwise the lookup decides, Global until it has answered.
   const region = regionChoice ?? (geo?.country_code === 'CN' ? 'china' : 'global');
@@ -447,17 +507,26 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
         </section>
       </div>
 
-      <dl {...stylex.props(styles.info)}>
-        <Info label="IP address" value={geo && <Address ip={geo.ip} />} />
-        <Info label="Location" value={geo && stringJoin([geo.city, geo.region, geo.country], ', ', true)} />
-        <Info label="Provider" value={geo?.isp} />
-      </dl>
-      <p {...stylex.props(styles.footnote)}>
-        Learn more about your IP at
-        {' '}
-        {/* eslint-disable-next-line @eslint-react/dom-no-unsafe-target-blank -- our own site; the referrer is wanted */}
-        <a href="https://ip.skk.moe" target="_blank" {...stylex.props(styles.footnoteLink)}>ip.skk.moe</a>
-      </p>
+      <section {...stylex.props(styles.infoCard)}>
+        <dl {...stylex.props(styles.info)}>
+          <Info label="IP address" value={redacted ? hiddenJsx : geo && <Address ip={geo.ip} />} />
+          <Info label="Location" value={geo && stringJoin(redacted ? [geo.country] : [geo.city, geo.region, geo.country], ', ', true)} />
+          <Info label="Provider" value={redacted ? hiddenJsx : geo?.isp} />
+        </dl>
+        <p {...stylex.props(styles.footnote)}>
+          <span>
+            Learn more about your IP at
+            {' '}
+            {/* eslint-disable-next-line @eslint-react/dom-no-unsafe-target-blank -- our own site; the referrer is wanted */}
+            <a href="https://ip.skk.moe" target="_blank" {...stylex.props(styles.footnoteLink)}>ip.skk.moe</a>
+          </span>
+          <Toggle pressed={redacted} onPressedChange={setRedacted} {...stylex.props(styles.privacyToggle)}>
+            {redacted
+              ? <><Eye size={14} strokeWidth={1.8} aria-hidden />Show details</>
+              : <><EyeOff size={14} strokeWidth={1.8} aria-hidden />Hide details</>}
+          </Toggle>
+        </p>
+      </section>
     </div>
   );
 }
