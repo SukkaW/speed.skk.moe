@@ -204,8 +204,10 @@ type Pump = (signal: AbortSignal, meter: Meter) => Promise<void>;
 
 interface Outcome {
   mbps: number,
-  /** Settles once an in-flight loaded ping has landed or been given up on. */
-  loadedLatency: Promise<number | null>
+  /** Median of the loaded pings that have landed by the time the streams stop; null if none has. */
+  loadedLatency: number | null,
+  /** The same figure once an in-flight loaded ping has landed or been given up on. */
+  settledLoadedLatency: Promise<number | null>
 }
 
 type Progress = (live: number, loaded: number | null, samples: number[], bytes: number) => void;
@@ -289,14 +291,15 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
   signal.removeEventListener('abort', stop);
   await Promise.allSettled(streams);
 
+  const loadedLatency = () => (loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null);
   const settleLoaded = async () => {
     if (loadedPings.length === 0) await wait(LOADED_PING_GRACE);
     abortPings();
     await pinger;
     signal.removeEventListener('abort', abortPings);
-    return loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null;
+    return loadedLatency();
   };
-  return { mbps: sustained(samples), loadedLatency: settleLoaded() };
+  return { mbps: sustained(samples), loadedLatency: loadedLatency(), settledLoadedLatency: settleLoaded() };
 }
 
 /**
@@ -339,7 +342,7 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
       traffic: { ...state.traffic, download: bytes }
     });
   });
-  publish({ results: { ...state.results, download: download.mbps } });
+  publish({ results: { ...state.results, download: download.mbps, downloadLatency: download.loadedLatency } });
 
   let upload: Outcome | null = null;
   if (target.upload !== null) {
@@ -358,9 +361,14 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
       });
     });
   }
-  publish({ phase: 'done', live: 0, loaded: null, results: { ...state.results, upload: upload?.mbps ?? null } });
+  publish({
+    phase: 'done',
+    live: 0,
+    loaded: null,
+    results: { ...state.results, upload: upload?.mbps ?? null, uploadLatency: upload?.loadedLatency ?? null }
+  });
 
-  // Loaded latencies may still be waiting on one ping each; they fill in without holding up the result.
-  const [downloadLatency, uploadLatency] = await Promise.all([download.loadedLatency, upload?.loadedLatency ?? null]);
+  // A loaded ping may still be in flight for either phase; the medians are refined once it lands.
+  const [downloadLatency, uploadLatency] = await Promise.all([download.settledLoadedLatency, upload?.settledLoadedLatency ?? null]);
   publish({ results: { ...state.results, downloadLatency, uploadLatency } });
 }
