@@ -9,6 +9,7 @@ import 'stylex-webpack/stylex.css';
 import { colors, fonts } from './tokens.stylex';
 import { ThemeScript } from './theme-script';
 import { ColorSchemeProvider } from './color-scheme-provider';
+import { Toasts } from './toasts';
 
 const barlow = Barlow({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-barlow', display: 'swap' });
 const barlowSemiCondensed = Barlow_Semi_Condensed({ subsets: ['latin'], weight: ['500'], variable: '--font-barlow-semi-condensed', display: 'swap' });
@@ -133,7 +134,10 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
     <html lang="en" suppressHydrationWarning {...stylexPropsWithClassName(stylex.props(styles.html), barlow.variable, barlowSemiCondensed.variable)}>
       <body suppressHydrationWarning {...stylex.props(styles.body)}>
         <ThemeScript />
-        <ColorSchemeProvider>{children}</ColorSchemeProvider>
+        <ColorSchemeProvider>
+          {children}
+          <Toasts />
+        </ColorSchemeProvider>
         <script
           type="application/ld+json"
           // eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml -- json ld

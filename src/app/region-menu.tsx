@@ -7,6 +7,8 @@ import { menuStyles } from './menu-styles';
 import type { Region } from './targets';
 import { colors } from './tokens.stylex';
 
+const MOBILE = '@media (max-width: 639px)';
+
 const styles = stylex.create({
   note: {
     marginLeft: 6,
@@ -14,19 +16,12 @@ const styles = stylex.create({
     fontWeight: 400,
     color: colors.inkFaint
   },
+  // Phones only get the globe; the header has no room for the label beside the other controls.
   trigger: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    width: 'auto',
-    paddingInline: 10,
-    fontFamily: 'inherit',
-    fontSize: 14,
-    fontWeight: 500,
-    whiteSpace: 'nowrap',
-    cursor: { default: 'pointer', ':disabled': 'default' },
-    opacity: { default: 1, ':disabled': 0.55 }
-  }
+    width: { default: 'auto', [MOBILE]: 36 },
+    paddingInline: { default: 10, [MOBILE]: 0 }
+  },
+  label: { display: { default: 'inline', [MOBILE]: 'none' } }
 });
 
 const LABELS: Record<Region, string> = { global: 'Global', china: 'Mainland China' };
@@ -47,10 +42,10 @@ export function RegionMenu({ value, onValueChange, disabled }: RegionMenuProps) 
         disabled={disabled}
         aria-label={`Region: ${LABELS[value]}`}
         title="Region"
-        {...stylex.props(menuStyles.trigger, styles.trigger)}
+        {...stylex.props(menuStyles.trigger, menuStyles.labelled, styles.trigger)}
       >
         <Globe size={18} strokeWidth={1.8} aria-hidden />
-        {LABELS[value]}
+        <span {...stylex.props(styles.label)}>{LABELS[value]}</span>
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={8} {...stylex.props(menuStyles.positioner)}>

@@ -20,13 +20,27 @@ export const menuStyles = stylex.create({
       default: colors.inkMuted,
       ':hover': colors.ink
     },
-    cursor: 'pointer',
+    cursor: { default: 'pointer', ':disabled': 'default' },
+    opacity: { default: 1, ':disabled': 0.55 },
     outlineStyle: { default: 'none', ':focus-visible': 'solid' },
     outlineWidth: 2,
     outlineColor: colors.ink,
     outlineOffset: 2,
     transitionProperty: 'background-color, color',
     transitionDuration: '150ms'
+  },
+  /** Trigger variant with an icon and a text label. */
+  labelled: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: 'auto',
+    paddingInline: 10,
+    fontFamily: 'inherit',
+    fontSize: 14,
+    fontWeight: 500,
+    whiteSpace: 'nowrap'
   },
   positioner: {
     zIndex: 10,

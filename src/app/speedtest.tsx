@@ -1,13 +1,17 @@
 'use client';
 
 import * as stylex from '@stylexjs/stylex';
-import { Fragment, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Button } from '@base-ui/react/button';
 import { Switch } from '@base-ui/react/switch';
 import { Toggle } from '@base-ui/react/toggle';
-import { Eye, EyeOff, Play, RotateCw, Square } from 'lucide-react';
+import { Camera, Eye, EyeOff, Play, RotateCw, Square } from 'lucide-react';
 import { stringJoin } from 'foxts/string-join';
+import { noop } from 'foxts/noop';
+import { toast } from 'sonner';
 import { prettyBandwidth, prettyTraffic } from 'xbits';
+import { menuStyles } from './menu-styles';
 import { RegionMenu } from './region-menu';
 import { TrendChart } from './trend-chart';
 import { colors, fonts } from './tokens.stylex';
@@ -26,6 +30,25 @@ function formatOrDash(value: number | null, format: Intl.NumberFormat) {
 function splitUnit(pretty: string) {
   const [value, unit] = pretty.split(' ', 2);
   return { value, unit };
+}
+
+const RE_TIMESTAMP_SEPARATORS = /[:T]/g;
+/** CSS px of page background kept around the captured block. */
+const SCREENSHOT_MARGIN = 24;
+
+/** Fallback when the clipboard refuses images: hand the file to the browser's download instead. */
+function save(image: Promise<Blob>) {
+  return image
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `speed.skk.moe-${new Date().toISOString().slice(0, 19).replaceAll(RE_TIMESTAMP_SEPARATORS, '-')}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success('Clipboard unavailable. Screenshot saved instead.');
+    })
+    .catch(() => toast.error('Screenshot failed'));
 }
 
 const MOBILE = '@media (max-width: 639px)';
@@ -399,12 +422,56 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
   const running = phase !== 'idle' && phase !== 'done';
   const downloaded = splitUnit(prettyTraffic(traffic.download));
   const uploaded = splitUnit(prettyTraffic(traffic.upload));
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [capturing, setCapturing] = useState(false);
+
+  const screenshot = () => {
+    const node = rootRef.current;
+    if (node === null) return;
+    const wasRedacted = redacted;
+    // The clone below has to see the masked details, and Safari only honours clipboard writes
+    // issued inside the click itself, so the DOM is updated now rather than after a re-render.
+    // eslint-disable-next-line @eslint-react/dom-no-flush-sync -- one flush per click, see above
+    flushSync(() => {
+      setRedacted(true);
+      setCapturing(true);
+    });
+    // The renderer is only ever needed here, long after load, so it ships as its own chunk.
+    const image = import(/* webpackPrefetch: true */ 'modern-screenshot').then(({ domToBlob }) => domToBlob(node, {
+      scale: 2,
+      width: node.offsetWidth + SCREENSHOT_MARGIN * 2,
+      height: node.offsetHeight + SCREENSHOT_MARGIN * 2,
+      style: { padding: `${SCREENSHOT_MARGIN}px` },
+      backgroundColor: getComputedStyle(document.documentElement).backgroundColor,
+      filter: (el) => !(el instanceof HTMLElement) || el.dataset.screenshot !== 'hide'
+    }));
+    image.catch(noop).finally(() => {
+      setRedacted(wasRedacted);
+      setCapturing(false);
+    });
+    const copy = typeof ClipboardItem === 'undefined'
+      ? Promise.reject(new Error('Clipboard images are not supported'))
+      // eslint-disable-next-line vibe-proof/react-prefer-foxact-use-clipboard -- foxact/use-clipboard copies text; this writes an image
+      : navigator.clipboard.write([new ClipboardItem({ 'image/png': image })]);
+    copy
+      .then(() => toast.success('Screenshot copied to clipboard'))
+      .catch(() => save(image));
+  };
 
   return (
-    <div {...stylex.props(styles.grid)}>
+    <div ref={rootRef} {...stylex.props(styles.grid)}>
       <header {...stylex.props(styles.header)}>
         <div>{wordmark}</div>
-        <div {...stylex.props(styles.menu)}>
+        <div data-screenshot="hide" {...stylex.props(styles.menu)}>
+          <Button
+            title="Copy a screenshot to the clipboard"
+            disabled={phase !== 'done' || capturing}
+            onClick={screenshot}
+            {...stylex.props(menuStyles.trigger, menuStyles.labelled)}
+          >
+            <Camera size={18} strokeWidth={1.8} aria-hidden />
+            Screenshot
+          </Button>
           <RegionMenu value={region} onValueChange={setRegionChoice} disabled={running} />
           {appearance}
         </div>
@@ -513,7 +580,7 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
           <Info label="Location" value={geo && stringJoin(redacted ? [geo.country] : [geo.city, geo.region, geo.country], ', ', true)} />
           <Info label="Provider" value={redacted ? hiddenJsx : geo?.isp} />
         </dl>
-        <p {...stylex.props(styles.footnote)}>
+        <p data-screenshot="hide" {...stylex.props(styles.footnote)}>
           <span>
             Learn more about your IP at
             {' '}

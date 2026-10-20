@@ -15,9 +15,11 @@
     "foxts": "^5.9.1",
     "lucide-react": "^1.60.0",
     "minireset.css": "^0.0.7",
+    "modern-screenshot": "^4.7.0",
     "next": "^16.4.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "sonner": "^2.0.8",
     "swr": "^2.5.1",
     "xbits": "^0.2.0"
   },
