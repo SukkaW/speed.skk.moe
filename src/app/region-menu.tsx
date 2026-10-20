@@ -5,8 +5,15 @@ import { Menu } from '@base-ui/react/menu';
 import { Check, Globe } from 'lucide-react';
 import { menuStyles } from './menu-styles';
 import type { Region } from './targets';
+import { colors } from './tokens.stylex';
 
 const styles = stylex.create({
+  note: {
+    marginLeft: 6,
+    fontSize: 12,
+    fontWeight: 400,
+    color: colors.inkFaint
+  },
   trigger: {
     display: 'flex',
     alignItems: 'center',
@@ -23,6 +30,8 @@ const styles = stylex.create({
 });
 
 const LABELS: Record<Region, string> = { global: 'Global', china: 'Mainland China' };
+/** Shown after the label in the menu only; the trigger stays short. */
+const NOTES: Partial<Record<Region, string>> = { china: '(upload not supported)' };
 const REGIONS: readonly Region[] = ['global', 'china'];
 
 interface RegionMenuProps {
@@ -49,7 +58,10 @@ export function RegionMenu({ value, onValueChange, disabled }: RegionMenuProps) 
             <Menu.RadioGroup value={value} onValueChange={onValueChange as (value: unknown) => void}>
               {REGIONS.map((region) => (
                 <Menu.RadioItem key={region} value={region} closeOnClick {...stylex.props(menuStyles.item)}>
-                  {LABELS[region]}
+                  <span>
+                    {LABELS[region]}
+                    {NOTES[region] === undefined ? null : <span {...stylex.props(styles.note)}>{NOTES[region]}</span>}
+                  </span>
                   <Menu.RadioItemIndicator {...stylex.props(menuStyles.check)}>
                     <Check size={16} strokeWidth={2} aria-hidden />
                   </Menu.RadioItemIndicator>

@@ -449,7 +449,7 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
 
       <dl {...stylex.props(styles.info)}>
         <Info label="IP address" value={geo && <Address ip={geo.ip} />} />
-        <Info label="Location" value={geo && stringJoin([geo.city || geo.region, geo.country], ', ')} />
+        <Info label="Location" value={geo && stringJoin([geo.city, geo.region, geo.country], ', ', true)} />
         <Info label="Provider" value={geo?.isp} />
       </dl>
       <p {...stylex.props(styles.footnote)}>
