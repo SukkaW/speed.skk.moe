@@ -1,13 +1,11 @@
 import * as stylex from '@stylexjs/stylex';
 import { CurrentYear } from 'foxact/current-year';
-import { Speedtest } from './speedtest';
-import { loadTargets } from './targets';
-import { ThemeMenu } from './theme-menu';
-import { colors, fonts } from './tokens.stylex';
+import { Speedtest } from './components/speedtest';
+import { loadTargets } from '@/lib/targets';
+import { bp } from '../styles/breakpoints.stylex';
+import { colors } from '../styles/tokens.stylex';
 
 const PAGE_PADDING = 'clamp(20px, 4vw, 40px)';
-const MOBILE = '@media (max-width: 639px)';
-const LARGE = '@media (min-width: 1024px)';
 
 const styles = stylex.create({
   main: {
@@ -21,25 +19,13 @@ const styles = stylex.create({
     paddingBottom: PAGE_PADDING,
     paddingLeft: PAGE_PADDING
   },
-  wordmark: {
-    fontFamily: fonts.condensed,
-    fontSize: { default: 22, [LARGE]: 28 },
-    fontWeight: 500,
-    lineHeight: 1,
-    // The face's ascent spans the whole em with the descent below it, so the lowercase glyphs
-    // sit about 0.15em below the box centre; this lines them up with the header controls.
-    transform: 'translateY(-0.13em)',
-    letterSpacing: '-0.01em',
-    whiteSpace: 'nowrap'
-  },
-  wordmarkDomain: { color: colors.inkMuted },
   // Aligns with the info row above it.
   footer: {
     width: '100%',
     maxWidth: 1120,
-    marginTop: { default: 24, [MOBILE]: 16, [LARGE]: 32 },
-    paddingInline: { default: 16, [MOBILE]: 12, [LARGE]: 24 },
-    fontSize: { default: 13, [LARGE]: 14 },
+    marginTop: { default: 24, [bp.mobile]: 16, [bp.large]: 32 },
+    paddingInline: { default: 16, [bp.mobile]: 12, [bp.large]: 24 },
+    fontSize: { default: 13, [bp.large]: 14 },
     lineHeight: 1.3,
     color: colors.inkMuted
   },
@@ -59,24 +45,21 @@ const styles = stylex.create({
 
 export default function Home() {
   const targets = loadTargets();
+
   return (
     <main {...stylex.props(styles.main)}>
-      <Speedtest
-        targets={targets}
-        wordmark={(
-          <h1 {...stylex.props(styles.wordmark)}>
-            speed<span {...stylex.props(styles.wordmarkDomain)}>.skk.moe</span>
-          </h1>
-        )}
-        appearance={<ThemeMenu />}
-      />
+      <Speedtest targets={targets} />
       <footer {...stylex.props(styles.footer)}>
-        © <CurrentYear defaultYear={2026} /> speed.skk.moe. All rights reserved
+        &copy;
+        {' '}
+        <CurrentYear defaultYear={2026} />
+        {' '}
+        speed.skk.moe. All rights reserved
         <span aria-hidden {...stylex.props(styles.separator)}>|</span>
         Made by
         {' '}
         {/* eslint-disable-next-line @eslint-react/dom-no-unsafe-target-blank -- our own site; the referrer is wanted */}
-        <a href="https://skk.moe" target="_blank" {...stylex.props(styles.footerLink)}>Sukka</a>.
+        <a href="https://skk.moe" target="_blank" {...stylex.props(styles.footerLink)}>Sukka</a>
       </footer>
     </main>
   );

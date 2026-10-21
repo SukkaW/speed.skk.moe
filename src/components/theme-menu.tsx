@@ -1,8 +1,8 @@
 import * as stylex from '@stylexjs/stylex';
-import { Check, Monitor, Moon, Sun } from 'lucide-react';
+import { CheckIcon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { ColorSchemeMenu } from './theme-menu.client';
 import type { ColorSchemeMenuItem } from './theme-menu.client';
-import { colors } from './tokens.stylex';
+import { colors } from '../styles/tokens.stylex';
 
 const styles = stylex.create({
   label: {
@@ -17,12 +17,12 @@ const styles = stylex.create({
 });
 
 const ITEMS: ColorSchemeMenuItem[] = ([
-  { value: 'system', text: 'System', Icon: Monitor },
-  { value: 'light', text: 'Light', Icon: Sun },
-  { value: 'dark', text: 'Dark', Icon: Moon }
+  { value: 'system', text: 'System', Icon: MonitorIcon },
+  { value: 'light', text: 'Light', Icon: SunIcon },
+  { value: 'dark', text: 'Dark', Icon: MoonIcon }
 ] as const).map(({ value, text, Icon }) => ({
   value,
-  label: (
+  labelSlot: (
     <span {...stylex.props(styles.label)}>
       <Icon size={16} strokeWidth={1.8} aria-hidden {...stylex.props(styles.icon)} />
       {text}
@@ -35,8 +35,8 @@ export function ThemeMenu() {
   return (
     <ColorSchemeMenu
       items={ITEMS}
-      check={<Check size={16} strokeWidth={2} aria-hidden />}
-      trigger={(
+      checkSlot={<CheckIcon size={16} strokeWidth={2} aria-hidden />}
+      triggerSlot={(
         <>
           {/*
             All three glyphs are rendered and globals.css shows the one matching the <html>
@@ -44,9 +44,9 @@ export function ThemeMenu() {
             from the server's, and that hydration re-render drops the class the blocking
             theme script applied.
           */}
-          <Monitor size={18} strokeWidth={1.8} aria-hidden data-theme-icon="system" />
-          <Sun size={18} strokeWidth={1.8} aria-hidden data-theme-icon="light" />
-          <Moon size={18} strokeWidth={1.8} aria-hidden data-theme-icon="dark" />
+          <MonitorIcon size={18} strokeWidth={1.8} aria-hidden data-theme-icon="system" />
+          <SunIcon size={18} strokeWidth={1.8} aria-hidden data-theme-icon="light" />
+          <MoonIcon size={18} strokeWidth={1.8} aria-hidden data-theme-icon="dark" />
         </>
       )}
     />

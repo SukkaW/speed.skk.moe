@@ -1,6 +1,6 @@
 import * as stylex from '@stylexjs/stylex';
 import { useId } from 'react';
-import { colors } from './tokens.stylex';
+import { colors } from '../../styles/tokens.stylex';
 
 const WIDTH = 100;
 const HEIGHT = 40;

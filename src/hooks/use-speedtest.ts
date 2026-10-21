@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
-import { IDLE, runSpeedtest } from './engine';
-import type { SpeedtestState, ThreadMode } from './engine';
-import { MIN_DURATION, SAMPLE_INTERVAL } from './stability';
-import type { Target } from './targets';
+import { useEffect, useRef } from 'react';
+import { useSetSpeedtestState } from '@/context/speedtest';
+import { IDLE, runSpeedtest } from '@/lib/engine';
+import type { ThreadMode } from '@/lib/engine';
+import { MIN_DURATION, SAMPLE_INTERVAL } from '@/lib/stability';
+import type { Target } from '@/lib/targets';
 
-export type { Phase, Results, SpeedtestState, ThreadMode, Traffic, Trend } from './engine';
+export type { Phase, Results, SpeedtestState, ThreadMode, Traffic, Trend } from '@/lib/engine';
 
 /** Samples a phase has produced by the minimum duration; the trend chart fills by then and compresses after. */
 export const TREND_SAMPLES = Math.round(MIN_DURATION / SAMPLE_INTERVAL);
 
-export function useSpeedtest(mode: ThreadMode, target: Target) {
-  const [state, setState] = useState<SpeedtestState>(IDLE);
+/** Starts and stops runs, publishing their state through the context; one caller owns the run. */
+export function useSpeedtestControls(mode: ThreadMode, target: Target) {
+  const setState = useSetSpeedtestState();
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -31,5 +33,5 @@ export function useSpeedtest(mode: ThreadMode, target: Target) {
     });
   };
 
-  return { ...state, start, stop };
+  return { start, stop };
 }

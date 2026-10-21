@@ -2,7 +2,7 @@
 
 import { useRef } from 'react';
 import { useServerInsertedHTML } from 'next/navigation';
-import { THEME_COLOR, THEME_STORAGE_KEY } from './theme';
+import { THEME_COLOR, THEME_STORAGE_KEY } from '@/lib/theme';
 
 /**
   ((document, key, darkColor, lightColor) => {

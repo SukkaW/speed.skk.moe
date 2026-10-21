@@ -4,12 +4,12 @@ import { Barlow, Barlow_Semi_Condensed } from 'next/font/google';
 import * as stylex from '@stylexjs/stylex';
 import { stylexPropsWithClassName } from 'stylex-webpack/utils';
 import 'minireset.css';
-import './globals.css';
+import '@/styles/globals.css';
 import 'stylex-webpack/stylex.css';
-import { colors, fonts } from './tokens.stylex';
-import { ThemeScript } from './theme-script';
-import { ColorSchemeProvider } from './color-scheme-provider';
-import { Toasts } from './toasts';
+import { colors, fonts } from '../styles/tokens.stylex';
+import { ThemeScript } from '@/components/theme-script';
+import { ColorSchemeProvider } from '@/context/color-scheme-provider';
+import { Toasts } from '@/components/toasts';
 
 const barlow = Barlow({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-barlow', display: 'swap' });
 const barlowSemiCondensed = Barlow_Semi_Condensed({ subsets: ['latin'], weight: ['500'], variable: '--font-barlow-semi-condensed', display: 'swap' });
@@ -27,12 +27,13 @@ const styles = stylex.create({
 });
 
 const SITE_NAME = 'Speedtest | Sukka';
-const DESCRIPTION = 'Test your download speed, upload speed and latency. Made by Sukka (https://skk.moe)';
+const APP_NAME = 'speed.skk.moe';
+const DESCRIPTION = 'Measure your download and upload speed, latency and jitter.';
 
 const jsonLd: WithContext<WebApplication> = {
   '@context': 'https://schema.org',
   '@type': 'WebApplication',
-  name: SITE_NAME,
+  name: APP_NAME,
   url: 'https://speed.skk.moe/',
   description: DESCRIPTION,
   image: 'https://cdn.skk.moe/favicon/android-chrome-512x512.png',
@@ -57,7 +58,9 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://speed.skk.moe'),
   title: SITE_NAME,
   description: DESCRIPTION,
-  applicationName: SITE_NAME,
+  applicationName: APP_NAME,
+  authors: [{ name: 'Sukka', url: 'https://skk.moe' }],
+  creator: 'Sukka',
   icons: {
     shortcut: {
       type: 'image/ico',
@@ -99,14 +102,14 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: SITE_NAME,
+    title: APP_NAME,
     statusBarStyle: 'default'
   },
   openGraph: {
     type: 'website',
     url: 'https://speed.skk.moe/',
     title: SITE_NAME,
-    siteName: SITE_NAME,
+    siteName: APP_NAME,
     description: DESCRIPTION,
     images: {
       url: 'https://cdn.skk.moe/favicon/android-chrome-512x512.png',

@@ -1,8 +1,8 @@
 'use client';
 
 import { Toaster } from 'sonner';
-import { useColorScheme } from './color-scheme-provider';
-import { colors, fonts } from './tokens.stylex';
+import { useColorScheme } from '@/context/color-scheme-provider';
+import { colors, fonts } from '../styles/tokens.stylex';
 
 const style = {
   fontFamily: fonts.sans,

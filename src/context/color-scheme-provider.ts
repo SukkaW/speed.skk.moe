@@ -3,8 +3,8 @@
 import { useCallback, useRef } from 'react';
 import { createContextState } from 'foxact/context-state';
 import { cancelIdleCallback, requestIdleCallback } from 'foxact/request-idle-callback';
-import { THEME_COLOR, THEME_STORAGE_KEY } from './theme';
-import type { ColorScheme } from './theme';
+import { THEME_COLOR, THEME_STORAGE_KEY } from '@/lib/theme';
+import type { ColorScheme } from '@/lib/theme';
 
 function applyToDom(scheme: ColorScheme) {
   const root = document.documentElement;
