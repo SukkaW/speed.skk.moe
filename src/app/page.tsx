@@ -1,6 +1,7 @@
 import * as stylex from '@stylexjs/stylex';
 import { CurrentYear } from 'foxact/current-year';
 import { Speedtest } from './speedtest';
+import { loadTargets } from './targets';
 import { ThemeMenu } from './theme-menu';
 import { colors, fonts } from './tokens.stylex';
 
@@ -57,9 +58,11 @@ const styles = stylex.create({
 });
 
 export default function Home() {
+  const targets = loadTargets();
   return (
     <main {...stylex.props(styles.main)}>
       <Speedtest
+        targets={targets}
         wordmark={(
           <h1 {...stylex.props(styles.wordmark)}>
             speed<span {...stylex.props(styles.wordmarkDomain)}>.skk.moe</span>

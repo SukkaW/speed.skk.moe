@@ -17,7 +17,8 @@ import { TrendChart } from './trend-chart';
 import { colors, fonts } from './tokens.stylex';
 import { useGeo } from './use-geo';
 import { TREND_SAMPLES, useSpeedtest } from './use-speedtest';
-import type { Region, ThreadMode } from './use-speedtest';
+import type { ThreadMode } from './use-speedtest';
+import type { Target } from './targets';
 
 const wholeNumber = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const oneDecimal = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -404,21 +405,31 @@ const hiddenJsx = (
   </span>
 );
 
+/** The first target listing the visitor's country, if any. */
+function detect(targets: readonly Target[], country: string): Target | undefined {
+  for (let i = 0, len = targets.length; i < len; i++) {
+    if (targets[i].countries.includes(country)) return targets[i];
+  }
+  return undefined;
+}
+
 interface SpeedtestProps {
+  /** Regions to test against, in menu order; parsed from the environment on the server. */
+  targets: readonly Target[],
   /** Server-rendered wordmark and appearance menu, placed in the header row. */
   wordmark: React.ReactNode,
   appearance: React.ReactNode
 }
 
-export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
+export function Speedtest({ targets, wordmark, appearance }: SpeedtestProps) {
   const [mode, setMode] = useState<ThreadMode>('multi');
-  const [regionChoice, setRegionChoice] = useState<Region | null>(null);
+  const [choice, setChoice] = useState<Target | null>(null);
   // Screenshot mode: personal details are masked and the location drops to the country.
   const [redacted, setRedacted] = useState(false);
   const { data: geo, isLoading: locating } = useGeo();
-  // A manual pick always wins; otherwise the lookup decides, Global until it has answered.
-  const region = regionChoice ?? (geo?.country_code === 'CN' ? 'china' : 'global');
-  const { phase, live, loaded, results, trend, traffic, start, stop } = useSpeedtest(mode, region);
+  // A manual pick always wins; otherwise the lookup decides, the first target until it has answered.
+  const target = choice ?? (geo === undefined ? undefined : detect(targets, geo.country_code)) ?? targets[0];
+  const { phase, live, loaded, results, trend, traffic, start, stop } = useSpeedtest(mode, target);
   const running = phase !== 'idle' && phase !== 'done';
   const downloaded = splitUnit(prettyTraffic(traffic.download));
   const uploaded = splitUnit(prettyTraffic(traffic.upload));
@@ -472,7 +483,7 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
             <Camera size={18} strokeWidth={1.8} aria-hidden />
             Screenshot
           </Button>
-          <RegionMenu value={region} onValueChange={setRegionChoice} disabled={running} />
+          <RegionMenu targets={targets} value={target} onValueChange={setChoice} disabled={running} />
           {appearance}
         </div>
         <div {...stylex.props(styles.toolbar)}>
@@ -560,7 +571,7 @@ export function Speedtest({ wordmark, appearance }: SpeedtestProps) {
             <Stat label="Downloaded" value={downloaded.value} unit={downloaded.unit} />
           </dl>
         </section>
-        <section {...stylex.props(styles.direction, region === 'china' && styles.directionMuted)}>
+        <section {...stylex.props(styles.direction, target.upload.length === 0 && styles.directionMuted)}>
           <Panel
             direction="upload"
             label="Upload"

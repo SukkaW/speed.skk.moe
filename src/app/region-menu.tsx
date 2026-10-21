@@ -2,9 +2,9 @@
 
 import * as stylex from '@stylexjs/stylex';
 import { Menu } from '@base-ui/react/menu';
-import { Check, Globe } from 'lucide-react';
+import { Check, Server } from 'lucide-react';
 import { menuStyles } from './menu-styles';
-import type { Region } from './targets';
+import type { Target } from './targets';
 import { colors } from './tokens.stylex';
 
 const MOBILE = '@media (max-width: 639px)';
@@ -24,38 +24,39 @@ const styles = stylex.create({
   label: { display: { default: 'inline', [MOBILE]: 'none' } }
 });
 
-const LABELS: Record<Region, string> = { global: 'Global', china: 'Mainland China' };
-/** Shown after the label in the menu only; the trigger stays short. */
-const NOTES: Partial<Record<Region, string>> = { china: '(upload not supported)' };
-const REGIONS: readonly Region[] = ['global', 'china'];
-
 interface RegionMenuProps {
-  value: Region,
-  onValueChange: (region: Region) => void,
+  targets: readonly Target[],
+  value: Target,
+  onValueChange: (target: Target) => void,
   disabled?: boolean
 }
 
-export function RegionMenu({ value, onValueChange, disabled }: RegionMenuProps) {
+export function RegionMenu({ targets, value, onValueChange, disabled }: RegionMenuProps) {
+  const pick = (name: unknown) => {
+    const next = targets.find((target) => target.name === name);
+    if (next) onValueChange(next);
+  };
+
   return (
     <Menu.Root modal={false}>
       <Menu.Trigger
         disabled={disabled}
-        aria-label={`Region: ${LABELS[value]}`}
+        aria-label={`Region: ${value.name}`}
         title="Region"
         {...stylex.props(menuStyles.trigger, menuStyles.labelled, styles.trigger)}
       >
-        <Globe size={18} strokeWidth={1.8} aria-hidden />
-        <span {...stylex.props(styles.label)}>{LABELS[value]}</span>
+        <Server size={18} strokeWidth={1.8} aria-hidden />
+        <span {...stylex.props(styles.label)}>{value.name}</span>
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={8} {...stylex.props(menuStyles.positioner)}>
           <Menu.Popup {...stylex.props(menuStyles.popup)}>
-            <Menu.RadioGroup value={value} onValueChange={onValueChange as (value: unknown) => void}>
-              {REGIONS.map((region) => (
-                <Menu.RadioItem key={region} value={region} closeOnClick {...stylex.props(menuStyles.item)}>
+            <Menu.RadioGroup value={value.name} onValueChange={pick}>
+              {targets.map((target) => (
+                <Menu.RadioItem key={target.name} value={target.name} closeOnClick {...stylex.props(menuStyles.item)}>
                   <span>
-                    {LABELS[region]}
-                    {NOTES[region] === undefined ? null : <span {...stylex.props(styles.note)}>{NOTES[region]}</span>}
+                    {target.name}
+                    {target.upload.length === 0 && <span {...stylex.props(styles.note)}>(upload not supported)</span>}
                   </span>
                   <Menu.RadioItemIndicator {...stylex.props(menuStyles.check)}>
                     <Check size={16} strokeWidth={2} aria-hidden />

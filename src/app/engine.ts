@@ -111,15 +111,13 @@ async function discard(body: ReadableStream<Uint8Array> | null) {
   }
 }
 
-/** Round trip to the ping host: time to first byte of a one-byte range request. */
+/** Round trip to the ping host: time to the headers of a HEAD request. */
 async function ping(target: string, signal: AbortSignal): Promise<number> {
   // The hosts ignore the query string; it only makes the Resource Timing entry addressable.
   const url = `${target}?ping=${performance.now().toFixed(3)}`;
   const started = performance.now();
-  const response = await fetch(url, { ...FETCH_INIT, headers: { Range: 'bytes=0-0' }, signal });
+  await fetch(url, { ...FETCH_INIT, method: 'HEAD', signal });
   const headersAt = performance.now();
-  // Headers are what we time; on a loaded connection the body can sit behind bulk data frames.
-  await discard(response.body);
   const entry = performance.getEntriesByName(url, 'resource').at(-1) as PerformanceResourceTiming | undefined;
   // Timing-Allow-Origin: * is set, so these are populated cross-origin; the wall clock is the fallback.
   return entry && entry.requestStart > 0 && entry.responseStart > 0
@@ -345,11 +343,11 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
   publish({ results: { ...state.results, download: download.mbps, downloadLatency: download.loadedLatency } });
 
   let upload: Outcome | null = null;
-  if (target.upload !== null) {
-    const sink = target.upload;
+  if (target.upload.length > 0) {
+    const sinks = target.upload;
     const uploadPumps: Pump[] = [];
     for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
-      uploadPumps.push((phaseSignal, meter) => push(sink, phaseSignal, meter));
+      uploadPumps.push((phaseSignal, meter) => push(sinks[i % sinks.length], phaseSignal, meter));
     }
     upload = await measure(uploadPumps, target.ping, signal, (live, loaded, samples, bytes) => {
       publish({

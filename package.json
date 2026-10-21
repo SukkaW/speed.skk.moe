@@ -19,9 +19,11 @@
     "next": "^16.4.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
     "sonner": "^2.0.8",
     "swr": "^2.5.1",
-    "xbits": "^0.2.0"
+    "xbits": "^0.2.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint-sukka/react": "^9.2.0",
