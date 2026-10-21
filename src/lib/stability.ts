@@ -20,9 +20,18 @@ const WINDOW = 3;
 const TRIM = 0.1;
 /** Seconds of samples behind the reported rate. */
 const RESULT_WINDOW = 5;
-/** Shares of the result window dropped as stalls and bursts, Ookla's 30/10 split. */
-const RESULT_TRIM_SLOW = 0.3;
+/**
+ * Shares of the result window dropped as stalls and bursts. The slow side is cut deeper because
+ * request turnover (a stream finishing, the next ramping up) leaves brief low samples that say
+ * nothing about the link. The chart trims the same shares over a shorter window, so on a steady
+ * link the reference line sits on the curve and only lags it when the link moves.
+ */
+const RESULT_TRIM_SLOW = 0.2;
 const RESULT_TRIM_FAST = 0.1;
+/** Seconds of samples behind each point of the chart. */
+const CHART_WINDOW = 2;
+const CHART_TRIM_SLOW = RESULT_TRIM_SLOW;
+const CHART_TRIM_FAST = RESULT_TRIM_FAST;
 /** Seconds the estimate must stay within TOLERANCE of its latest value. */
 const STABLE_FOR = 2;
 const TOLERANCE = 0.04;
@@ -50,12 +59,20 @@ export function estimate(samples: readonly number[]): number {
 }
 
 /**
- * The rate to report: the last few seconds with stalls and bursts discarded asymmetrically,
- * so a hiccup in the final second cannot drag the result below what the link sustained.
+ * The rate to report: the last few seconds with stalls and bursts discarded. Drawn across the
+ * chart as a reference line while the phase runs, so the curve's dips below it and humps above
+ * it read as what the figure leaves out. Zero until the warm-up has passed.
  */
 export function sustained(samples: readonly number[]): number {
+  const from = Math.max(toCount(WARMUP), samples.length - toCount(RESULT_WINDOW));
+  if (from >= samples.length) return 0;
+  return trimmedMean(samples.slice(from), RESULT_TRIM_SLOW, RESULT_TRIM_FAST);
+}
+
+/** The chart's view of the link: a short window that still shows a genuine slowdown, minus the turnover dips. */
+export function smoothed(samples: readonly number[]): number {
   if (samples.length === 0) return 0;
-  return trimmedMean(samples.slice(-toCount(RESULT_WINDOW)), RESULT_TRIM_SLOW, RESULT_TRIM_FAST);
+  return trimmedMean(samples.slice(-toCount(CHART_WINDOW)), CHART_TRIM_SLOW, CHART_TRIM_FAST);
 }
 
 /** One estimate is appended per sample, so its length is the elapsed time. */

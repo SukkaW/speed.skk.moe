@@ -41,7 +41,7 @@ const styles = stylex.create({
 
 /** Headline speed and trend of one direction: live while its phase runs, the result afterwards. */
 export function SpeedReadout({ direction }: { direction: 'download' | 'upload' }) {
-  const { phase, live, results, trend } = useSpeedtestState();
+  const { phase, live, marker, results, trend } = useSpeedtestState();
   const value = phase === direction ? live : results[direction];
   const samples = trend[direction];
   const speed = value == null ? null : splitUnit(prettyBandwidth(value * 1e6, { locale: 'en-US', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -52,7 +52,7 @@ export function SpeedReadout({ direction }: { direction: 'download' | 'upload' }
         <span {...stylex.props(styles.panelUnit)}>{speed?.unit ?? 'Mbps'}</span>
       </p>
       <div {...stylex.props(styles.panelChart)}>
-        <TrendChart samples={samples} capacity={Math.max(samples.length, TREND_SAMPLES)} tone={direction} />
+        <TrendChart samples={samples} capacity={Math.max(samples.length, TREND_SAMPLES)} marker={phase === direction ? marker : results[direction]} markerLabel="Sustained" tone={direction} />
       </div>
     </>
   );

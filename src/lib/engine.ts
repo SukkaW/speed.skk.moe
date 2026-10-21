@@ -1,7 +1,7 @@
 /* eslint-disable no-await-in-loop -- pings and samples are sequential by design */
 import { noop } from 'foxts/noop';
 import { wait } from 'foxts/wait';
-import { SAMPLE_INTERVAL, estimate, shouldStop, sustained } from './stability';
+import { SAMPLE_INTERVAL, estimate, shouldStop, smoothed, sustained } from './stability';
 import type { Target } from './targets';
 
 export type ThreadMode = 'single' | 'multi';
@@ -31,8 +31,10 @@ export interface Traffic {
 
 export interface SpeedtestState {
   phase: Phase,
-  /** Live reading for the current phase: ms during latency, Mbps otherwise. Smoothed for display. */
+  /** Live reading for the current phase: ms during latency, the chart's current Mbps otherwise. */
   live: number,
+  /** Mbps the current throughput phase's result is heading for; drawn across its chart. Null outside those phases. */
+  marker: number | null,
   /** Live latency under load while a throughput phase runs; null until the first ping lands. */
   loaded: number | null,
   results: Results,
@@ -43,6 +45,7 @@ export interface SpeedtestState {
 export const IDLE: SpeedtestState = {
   phase: 'idle',
   live: 0,
+  marker: null,
   loaded: null,
   results: { latency: null, jitter: null, download: null, upload: null, downloadLatency: null, uploadLatency: null },
   trend: { download: [], upload: [] },
@@ -78,20 +81,16 @@ const LOADED_POINTS = 20;
 /** ms an in-flight loaded ping may still land after the streams stop. */
 const LOADED_PING_GRACE = 1500;
 
-// The headline eases toward the same sustained rate the result is taken from, every sample,
-// with a 1.2 s time constant. The digits roll continuously instead of stepping, the pulsing of
-// a single flow-controlled connection never reaches them, and the final figure lands where the
-// live one already was, give or take the easing lag.
-const HEADLINE_SMOOTHING = 1 - Math.exp(-SAMPLE_INTERVAL / 1.2);
-// The chart plots a one-second moving average of the samples, lightly eased. It reaches the
-// plateau within about a second and keeps the slower swings of a link that genuinely changes,
-// while the sub-second ripple of flow control and the steps of per-request upload readings
-// average out.
-const CHART_WINDOW = Math.round(1 / SAMPLE_INTERVAL);
+// The chart eases toward the smoothed rate so its line bends instead of stepping, and the
+// headline reads the curve's tip while a phase runs. The result the phase is heading for is
+// drawn across the chart as a marker; it steps while its window is still filling, so it follows
+// the same exponential moving average as the loaded pings. Once the streams stop, the headline
+// glides from the curve onto the exact result over a few ticks instead of jumping to it.
 const CHART_POLISH = 1 - Math.exp(-SAMPLE_INTERVAL / 0.5);
-// Sparse readings such as loaded pings follow an exponential moving average instead.
 const SMOOTHING = 1 - Math.exp(-SAMPLE_INTERVAL / 0.6);
 const smooth = (shown: number, reading: number) => shown + (reading - shown) * SMOOTHING;
+const SETTLE_TICKS = 6;
+const SETTLE_SMOOTHING = 0.5;
 
 function median(values: readonly number[]) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -208,7 +207,7 @@ interface Outcome {
   settledLoadedLatency: Promise<number | null>
 }
 
-type Progress = (live: number, loaded: number | null, samples: number[], bytes: number) => void;
+type Progress = (live: number, marker: number | null, loaded: number | null, samples: number[], bytes: number) => void;
 
 /** Runs the pumps until the stability rule fires, sampling throughput and pinging under load. */
 async function measure(pumps: readonly Pump[], pingTarget: string, signal: AbortSignal, onProgress: Progress): Promise<Outcome> {
@@ -257,11 +256,10 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
 
   const samples: number[] = [];
   const estimates: number[] = [];
-  // The chart and headline are display-only; the stability rule works on raw samples.
+  // The chart is display-only; the stability rule works on raw samples.
   const trend: number[] = [];
-  let windowSum = 0;
   let chartLine = 0;
-  let shown = 0;
+  let marker = 0;
   let bytes = 0;
   let last = performance.now();
   for (;;) {
@@ -276,11 +274,11 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
     last = now;
     samples.push(mbps);
     estimates.push(estimate(samples));
-    shown += (sustained(samples) - shown) * HEADLINE_SMOOTHING;
-    windowSum += mbps - (samples.length > CHART_WINDOW ? samples[samples.length - 1 - CHART_WINDOW] : 0);
-    chartLine += (windowSum / Math.min(samples.length, CHART_WINDOW) - chartLine) * CHART_POLISH;
+    chartLine += (smoothed(samples) - chartLine) * CHART_POLISH;
     trend.push(chartLine);
-    onProgress(shown, shownLoaded, [...trend], bytes);
+    const rate = sustained(samples);
+    marker = marker === 0 ? rate : smooth(marker, rate);
+    onProgress(chartLine, marker > 0 ? marker : null, shownLoaded, [...trend], bytes);
     if (shouldStop(estimates)) break;
   }
 
@@ -288,6 +286,14 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
   loading = false;
   signal.removeEventListener('abort', stop);
   await Promise.allSettled(streams);
+
+  const mbps = sustained(samples);
+  let shown = chartLine;
+  for (let tick = 1; tick <= SETTLE_TICKS && !signal.aborted; tick++) {
+    await wait(SAMPLE_INTERVAL * 1000);
+    shown = tick === SETTLE_TICKS ? mbps : shown + (mbps - shown) * SETTLE_SMOOTHING;
+    onProgress(shown, mbps, shownLoaded, [...trend], bytes);
+  }
 
   const loadedLatency = () => (loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null);
   const settleLoaded = async () => {
@@ -297,7 +303,7 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
     signal.removeEventListener('abort', abortPings);
     return loadedLatency();
   };
-  return { mbps: sustained(samples), loadedLatency: loadedLatency(), settledLoadedLatency: settleLoaded() };
+  return { mbps, loadedLatency: loadedLatency(), settledLoadedLatency: settleLoaded() };
 }
 
 /**
@@ -331,10 +337,11 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
       downloadPumps.push((phaseSignal, meter) => pump(objects[h], phaseSignal, meter));
     }
   }
-  const download = await measure(downloadPumps, target.ping, signal, (live, loaded, samples, bytes) => {
+  const download = await measure(downloadPumps, target.ping, signal, (live, marker, loaded, samples, bytes) => {
     publish({
       phase: 'download',
       live,
+      marker,
       loaded,
       trend: { ...state.trend, download: samples },
       traffic: { ...state.traffic, download: bytes }
@@ -349,10 +356,11 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
     for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
       uploadPumps.push((phaseSignal, meter) => push(sinks[i % sinks.length], phaseSignal, meter));
     }
-    upload = await measure(uploadPumps, target.ping, signal, (live, loaded, samples, bytes) => {
+    upload = await measure(uploadPumps, target.ping, signal, (live, marker, loaded, samples, bytes) => {
       publish({
         phase: 'upload',
         live,
+        marker,
         loaded,
         trend: { ...state.trend, upload: samples },
         traffic: { ...state.traffic, upload: bytes }
