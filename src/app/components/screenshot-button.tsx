@@ -6,7 +6,7 @@ import { Button } from '@base-ui/react/button';
 import { noop } from 'foxts/noop';
 import { toast } from 'sonner';
 import { menuStyles } from '../../styles/menu.stylex';
-import { useCapturing, useRedacted, useRoot, useSetCapturing, useSetRedacted, useSpeedtestState } from '@/context/speedtest';
+import { useCapturing, usePhase, useRedacted, useRoot, useSetCapturing, useSetRedacted } from '@/context/speedtest';
 
 const RE_TIMESTAMP_SEPARATORS = /[:T]/g;
 /** CSS px of page background kept around the captured block. */
@@ -29,7 +29,7 @@ function save(image: Promise<Blob>) {
 
 /** Copies a picture of the finished result with personal details masked. */
 export function ScreenshotButton({ children }: React.PropsWithChildren) {
-  const { phase } = useSpeedtestState();
+  const phase = usePhase();
   const capturing = useCapturing();
   const setCapturing = useSetCapturing();
   const redacted = useRedacted();

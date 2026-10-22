@@ -2,7 +2,7 @@
 
 import * as stylex from '@stylexjs/stylex';
 import { Button } from '@base-ui/react/button';
-import { useMode, useRunning, useSpeedtestState } from '@/context/speedtest';
+import { useMode, usePhase, useRunning } from '@/context/speedtest';
 import { useGeo } from '@/hooks/use-geo';
 import { useSpeedtestControls } from '@/hooks/use-speedtest';
 import { useTarget } from '@/hooks/use-target';
@@ -57,7 +57,7 @@ interface StartButtonProps {
 }
 
 export function StartButton({ targets, idleSlot, runningSlot, doneSlot }: StartButtonProps) {
-  const { phase } = useSpeedtestState();
+  const phase = usePhase();
   const running = useRunning();
   // The region is not settled until the lookup has answered.
   const { isLoading: locating } = useGeo();

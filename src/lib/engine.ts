@@ -21,34 +21,17 @@ export interface Throughput {
   bytes: number
 }
 
-export interface SpeedtestState {
-  phase: Phase,
+/** A throughput phase that has not run. */
+export const NOT_STARTED: Throughput = { speed: null, sustained: null, latency: null, trend: [], bytes: 0 };
+
+/** Where a run reports each figure as it changes. */
+export interface Report {
+  phase: (phase: Phase) => void,
   /** Idle latency in ms: each ping while the latency phase runs, then the median. */
-  latency: number | null,
-  jitter: number | null,
-  download: Throughput,
-  upload: Throughput
-}
-
-const NOT_STARTED: Throughput = { speed: null, sustained: null, latency: null, trend: [], bytes: 0 };
-
-export const IDLE: SpeedtestState = { phase: 'idle', latency: null, jitter: null, download: NOT_STARTED, upload: NOT_STARTED };
-
-const unfinished = (throughput: Throughput): Throughput => ({ ...throughput, speed: null, sustained: null, latency: null });
-
-/** A run that broke off: finished figures stay, the reading that was still live is dropped. */
-export function interrupted(state: SpeedtestState): SpeedtestState {
-  const done = { ...state, phase: 'done' as const };
-  switch (state.phase) {
-    case 'latency':
-      return { ...done, latency: null };
-    case 'download':
-      return { ...done, download: unfinished(state.download) };
-    case 'upload':
-      return { ...done, upload: unfinished(state.upload) };
-    default:
-      return done;
-  }
+  latency: (ms: number | null) => void,
+  jitter: (ms: number) => void,
+  download: (throughput: Throughput) => void,
+  upload: (throughput: Throughput) => void
 }
 
 // Nothing identifies the page to the hosts, and a missing CORS header fails loudly instead of
@@ -199,11 +182,8 @@ interface Meter {
 type Pump = (signal: AbortSignal, meter: Meter) => Promise<void>;
 
 interface Outcome {
-  mbps: number,
-  /** Median of the loaded pings that have landed by the time the streams stop; null if none has. */
-  loadedLatency: number | null,
-  /** The same figure once an in-flight loaded ping has landed or been given up on. */
-  settledLoadedLatency: Promise<number | null>
+  /** Settles once a loaded ping still in flight has landed or been given up on, and the phase is reported again with it. */
+  settled: Promise<void>
 }
 
 type Progress = (reading: Throughput) => void;
@@ -260,6 +240,9 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
   let chartLine = 0;
   let marker = 0;
   let bytes = 0;
+  const report = (speed: number, mark: number | null, latency: number | null) => {
+    if (!signal.aborted) onProgress({ speed, sustained: mark, latency, trend: [...trend], bytes });
+  };
   let last = performance.now();
   for (;;) {
     await wait(SAMPLE_INTERVAL * 1000);
@@ -277,7 +260,7 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
     trend.push(chartLine);
     const rate = sustained(samples);
     marker = marker === 0 ? rate : smooth(marker, rate);
-    onProgress({ speed: chartLine, sustained: marker > 0 ? marker : null, latency: shownLoaded, trend: [...trend], bytes });
+    report(chartLine, marker > 0 ? marker : null, shownLoaded);
     if (shouldStop(estimates)) break;
   }
 
@@ -287,47 +270,49 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
   await Promise.allSettled(streams);
 
   const mbps = sustained(samples);
+  const loadedLatency = () => (loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null);
   let shown = chartLine;
   for (let tick = 1; tick <= SETTLE_TICKS && !signal.aborted; tick++) {
     await wait(SAMPLE_INTERVAL * 1000);
     shown = tick === SETTLE_TICKS ? mbps : shown + (mbps - shown) * SETTLE_SMOOTHING;
-    onProgress({ speed: shown, sustained: mbps, latency: shownLoaded, trend: [...trend], bytes });
+    report(shown, mbps, shownLoaded);
   }
+  report(mbps, mbps, loadedLatency());
 
-  const loadedLatency = () => (loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null);
-  const settleLoaded = async () => {
+  const settle = async () => {
     if (loadedPings.length === 0) await wait(LOADED_PING_GRACE);
     abortPings();
     await pinger;
     signal.removeEventListener('abort', abortPings);
-    return loadedLatency();
+    report(mbps, mbps, loadedLatency());
   };
-  return { mbps, loadedLatency: loadedLatency(), settledLoadedLatency: settleLoaded() };
+  return { settled: settle() };
 }
 
 /**
- * Runs the full test, publishing state as it goes. Rejects with an AbortError when the
- * signal fires; nothing is published after that.
+ * Runs the full test, reporting each figure as it changes. Rejects with an AbortError when the
+ * signal fires; nothing is reported after that.
  */
-export async function runSpeedtest(mode: ThreadMode, target: Target, signal: AbortSignal, onState: (state: SpeedtestState) => void): Promise<void> {
-  let state: SpeedtestState = { ...IDLE, phase: 'latency' };
-  const publish = (patch: Partial<SpeedtestState>) => {
-    if (signal.aborted) return;
-    state = { ...state, ...patch };
-    onState(state);
-  };
-
+export async function runSpeedtest(mode: ThreadMode, target: Target, signal: AbortSignal, report: Report): Promise<void> {
   performance.clearResourceTimings();
-  // The first ping opens the connection and is discarded.
-  await ping(target.ping, signal);
   const pings: number[] = [];
-  const budgetEnds = performance.now() + LATENCY_BUDGET;
-  while (pings.length < LATENCY_PINGS_MAX && (pings.length < LATENCY_PINGS_MIN || performance.now() < budgetEnds)) {
-    const ms = await ping(target.ping, signal);
-    pings.push(ms);
-    publish({ phase: 'latency', latency: ms });
+  try {
+    // The first ping opens the connection and is discarded.
+    await ping(target.ping, signal);
+    const budgetEnds = performance.now() + LATENCY_BUDGET;
+    while (pings.length < LATENCY_PINGS_MAX && (pings.length < LATENCY_PINGS_MIN || performance.now() < budgetEnds)) {
+      const ms = await ping(target.ping, signal);
+      pings.push(ms);
+      report.latency(ms);
+    }
+  } catch (error) {
+    // The throughput phases retry dropped requests themselves, so an unreachable ping host is
+    // what ends a run early; the last ping shown is not a result.
+    if (!signal.aborted) report.latency(null);
+    throw error;
   }
-  publish({ latency: median(pings), jitter: meanAbsoluteDelta(pings) });
+  report.latency(median(pings));
+  report.jitter(meanAbsoluteDelta(pings));
 
   const downloadPumps: Pump[] = [];
   const objects = mode === 'multi' ? target.download : target.download.slice(0, 1);
@@ -336,10 +321,10 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
       downloadPumps.push((phaseSignal, meter) => pump(objects[h], phaseSignal, meter));
     }
   }
-  const download = await measure(downloadPumps, target.ping, signal, (reading) => {
-    publish({ phase: 'download', download: reading });
-  });
-  publish({ download: { ...state.download, speed: download.mbps, sustained: download.mbps, latency: download.loadedLatency } });
+  report.phase('download');
+  const download = await measure(downloadPumps, target.ping, signal, report.download);
+  // measure returns rather than throws when stopped; the next phase must not start.
+  signal.throwIfAborted();
 
   let upload: Outcome | null = null;
   if (target.upload.length > 0) {
@@ -348,14 +333,12 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
     for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
       uploadPumps.push((phaseSignal, meter) => push(sinks[i % sinks.length], phaseSignal, meter));
     }
-    upload = await measure(uploadPumps, target.ping, signal, (reading) => {
-      publish({ phase: 'upload', upload: reading });
-    });
-    publish({ upload: { ...state.upload, speed: upload.mbps, sustained: upload.mbps, latency: upload.loadedLatency } });
+    report.phase('upload');
+    upload = await measure(uploadPumps, target.ping, signal, report.upload);
+    signal.throwIfAborted();
   }
-  publish({ phase: 'done' });
+  report.phase('done');
 
   // A loaded ping may still be in flight for either phase; the medians are refined once it lands.
-  const [downloadLatency, uploadLatency] = await Promise.all([download.settledLoadedLatency, upload?.settledLoadedLatency ?? null]);
-  publish({ download: { ...state.download, latency: downloadLatency }, upload: { ...state.upload, latency: uploadLatency } });
+  await Promise.all([download.settled, upload?.settled]);
 }

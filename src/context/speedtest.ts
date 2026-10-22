@@ -1,17 +1,24 @@
 'use client';
 
 import { createContextState } from 'foxact/context-state';
-import { IDLE } from '@/lib/engine';
-import type { SpeedtestState, ThreadMode } from '@/lib/engine';
+import { NOT_STARTED } from '@/lib/engine';
+import type { Phase, ThreadMode, Throughput } from '@/lib/engine';
 
 // Destructured bindings are re-exported by name below: Next only turns plain named exports of a
 // client module into client references, so `export const [A, B] = …` reaches a server component as undefined.
 
-/** Live readings and results of the current run; written by the start button, read by every value. */
-const [SpeedtestStateProvider, useSpeedtestState, useSetSpeedtestState] = createContextState<SpeedtestState>(IDLE);
+// Live readings and results of the current run; written by the start button, read by every value.
+// One context per figure, so a tick re-renders only the values it changed. The figures are read
+// with `use(…Context)`, which may sit in a branch, so a value picks its source from a prop.
+const [PhaseProvider, usePhase, useSetPhase] = createContextState<Phase>('idle');
+/** Idle latency in ms: each ping while the latency phase runs, then the median. */
+const [LatencyProvider, , useSetLatency, LatencyContext] = createContextState<number | null>(null);
+const [JitterProvider, , useSetJitter, JitterContext] = createContextState<number | null>(null);
+const [DownloadProvider, , useSetDownload, DownloadContext] = createContextState<Throughput>(NOT_STARTED);
+const [UploadProvider, , useSetUpload, UploadContext] = createContextState<Throughput>(NOT_STARTED);
 
 export function useRunning() {
-  const { phase } = useSpeedtestState();
+  const phase = usePhase();
   return phase !== 'idle' && phase !== 'done';
 }
 
@@ -29,7 +36,11 @@ const [CapturingProvider, useCapturing, useSetCapturing] = createContextState(fa
 const [RootProvider, useRoot, useSetRoot] = createContextState<HTMLDivElement | null>(null);
 
 export {
-  SpeedtestStateProvider, useSpeedtestState, useSetSpeedtestState,
+  PhaseProvider, usePhase, useSetPhase,
+  LatencyProvider, useSetLatency, LatencyContext,
+  JitterProvider, useSetJitter, JitterContext,
+  DownloadProvider, useSetDownload, DownloadContext,
+  UploadProvider, useSetUpload, UploadContext,
   ModeProvider, useMode, useSetMode,
   ChoiceProvider, useChoice, useSetChoice,
   RedactedProvider, useRedacted, useSetRedacted,

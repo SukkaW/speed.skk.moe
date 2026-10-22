@@ -1,9 +1,9 @@
 'use client';
 
 import * as stylex from '@stylexjs/stylex';
+import { use } from 'react';
 import { prettyTraffic } from 'xbits';
-import { useSpeedtestState } from '@/context/speedtest';
-import type { SpeedtestState } from '@/lib/engine';
+import { DownloadContext, JitterContext, LatencyContext, UploadContext } from '@/context/speedtest';
 import { splitUnit } from '@/lib/split-unit';
 import { bp } from '../../styles/breakpoints.stylex';
 import { colors, fonts } from '../../styles/tokens.stylex';
@@ -45,20 +45,20 @@ function formatOrDash(value: number | null, format: Intl.NumberFormat) {
 export type StatKey = 'latency' | 'jitter' | 'downloadLatency' | 'uploadLatency' | 'downloaded' | 'uploaded';
 
 /** Live reading while its phase runs, the settled result otherwise. */
-function read(stat: StatKey, { latency, jitter, download, upload }: SpeedtestState): { value: string | null, unit: string } {
+function useStat(stat: StatKey): { value: string | null, unit: string } {
   switch (stat) {
     case 'latency':
-      return { value: formatOrDash(latency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(use(LatencyContext), wholeNumber), unit: 'ms' };
     case 'jitter':
-      return { value: formatOrDash(jitter, oneDecimal), unit: 'ms' };
+      return { value: formatOrDash(use(JitterContext), oneDecimal), unit: 'ms' };
     case 'downloadLatency':
-      return { value: formatOrDash(download.latency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(use(DownloadContext).latency, wholeNumber), unit: 'ms' };
     case 'uploadLatency':
-      return { value: formatOrDash(upload.latency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(use(UploadContext).latency, wholeNumber), unit: 'ms' };
     case 'downloaded':
-      return splitUnit(prettyTraffic(download.bytes));
+      return splitUnit(prettyTraffic(use(DownloadContext).bytes));
     case 'uploaded':
-      return splitUnit(prettyTraffic(upload.bytes));
+      return splitUnit(prettyTraffic(use(UploadContext).bytes));
     // no default
   }
 }
@@ -69,7 +69,7 @@ interface StatValueProps {
 }
 
 export function StatValue({ stat, compact }: StatValueProps) {
-  const { value, unit } = read(stat, useSpeedtestState());
+  const { value, unit } = useStat(stat);
   return (
     <dd {...stylex.props(styles.statValue, compact && styles.statValueCompact, value == null && styles.empty)}>
       {value ?? '—'}

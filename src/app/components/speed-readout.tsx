@@ -1,8 +1,9 @@
 'use client';
 
 import * as stylex from '@stylexjs/stylex';
+import { use } from 'react';
 import { prettyBandwidth } from 'xbits';
-import { useSpeedtestState } from '@/context/speedtest';
+import { DownloadContext, UploadContext } from '@/context/speedtest';
 import { splitUnit } from '@/lib/split-unit';
 import { bp } from '../../styles/breakpoints.stylex';
 import { colors, fonts } from '../../styles/tokens.stylex';
@@ -41,7 +42,7 @@ const styles = stylex.create({
 
 /** Headline speed and trend of one direction: live while its phase runs, the result afterwards. */
 export function SpeedReadout({ direction }: { direction: 'download' | 'upload' }) {
-  const { speed, sustained, trend } = useSpeedtestState()[direction];
+  const { speed, sustained, trend } = use(direction === 'download' ? DownloadContext : UploadContext);
   const figure = speed == null ? null : splitUnit(prettyBandwidth(speed * 1e6, { locale: 'en-US', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   return (
     <>
