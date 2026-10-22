@@ -29,7 +29,7 @@ const RESULT_WINDOW = 5;
 const RESULT_TRIM_SLOW = 0.2;
 const RESULT_TRIM_FAST = 0.1;
 /** Seconds of samples behind each point of the chart. */
-const CHART_WINDOW = 2;
+const CHART_WINDOW = 1.5;
 const CHART_TRIM_SLOW = RESULT_TRIM_SLOW;
 const CHART_TRIM_FAST = RESULT_TRIM_FAST;
 /** Seconds the estimate must stay within TOLERANCE of its latest value. */

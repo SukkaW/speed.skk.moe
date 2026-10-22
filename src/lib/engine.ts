@@ -7,50 +7,49 @@ import type { Target } from './targets';
 export type ThreadMode = 'single' | 'multi';
 export type Phase = 'idle' | 'latency' | 'download' | 'upload' | 'done';
 
-export interface Results {
+/** One throughput phase. Each figure is live while the phase runs and becomes the result when it ends. */
+export interface Throughput {
+  /** Mbps: the chart's current value while running, then the result. */
+  speed: number | null,
+  /** Mbps the result is heading for, drawn across the chart; the result once the phase ends. */
+  sustained: number | null,
+  /** ms while the link is saturated; null until the first loaded ping lands. */
   latency: number | null,
-  jitter: number | null,
-  download: number | null,
-  upload: number | null,
-  /** Latency measured while the link was saturated in each direction. */
-  downloadLatency: number | null,
-  uploadLatency: number | null
-}
-
-/** Readings recorded per throughput phase, one per sample interval. */
-export interface Trend {
-  download: number[],
-  upload: number[]
-}
-
-/** Bytes transferred so far in each direction. */
-export interface Traffic {
-  download: number,
-  upload: number
+  /** Chart readings, one per sample interval. */
+  trend: number[],
+  /** Bytes transferred so far. */
+  bytes: number
 }
 
 export interface SpeedtestState {
   phase: Phase,
-  /** Live reading for the current phase: ms during latency, the chart's current Mbps otherwise. */
-  live: number,
-  /** Mbps the current throughput phase's result is heading for; drawn across its chart. Null outside those phases. */
-  marker: number | null,
-  /** Live latency under load while a throughput phase runs; null until the first ping lands. */
-  loaded: number | null,
-  results: Results,
-  trend: Trend,
-  traffic: Traffic
+  /** Idle latency in ms: each ping while the latency phase runs, then the median. */
+  latency: number | null,
+  jitter: number | null,
+  download: Throughput,
+  upload: Throughput
 }
 
-export const IDLE: SpeedtestState = {
-  phase: 'idle',
-  live: 0,
-  marker: null,
-  loaded: null,
-  results: { latency: null, jitter: null, download: null, upload: null, downloadLatency: null, uploadLatency: null },
-  trend: { download: [], upload: [] },
-  traffic: { download: 0, upload: 0 }
-};
+const NOT_STARTED: Throughput = { speed: null, sustained: null, latency: null, trend: [], bytes: 0 };
+
+export const IDLE: SpeedtestState = { phase: 'idle', latency: null, jitter: null, download: NOT_STARTED, upload: NOT_STARTED };
+
+const unfinished = (throughput: Throughput): Throughput => ({ ...throughput, speed: null, sustained: null, latency: null });
+
+/** A run that broke off: finished figures stay, the reading that was still live is dropped. */
+export function interrupted(state: SpeedtestState): SpeedtestState {
+  const done = { ...state, phase: 'done' as const };
+  switch (state.phase) {
+    case 'latency':
+      return { ...done, latency: null };
+    case 'download':
+      return { ...done, download: unfinished(state.download) };
+    case 'upload':
+      return { ...done, upload: unfinished(state.upload) };
+    default:
+      return done;
+  }
+}
 
 // Nothing identifies the page to the hosts, and a missing CORS header fails loudly instead of
 // yielding an opaque response whose body cannot be read.
@@ -86,7 +85,7 @@ const LOADED_PING_GRACE = 1500;
 // drawn across the chart as a marker; it steps while its window is still filling, so it follows
 // the same exponential moving average as the loaded pings. Once the streams stop, the headline
 // glides from the curve onto the exact result over a few ticks instead of jumping to it.
-const CHART_POLISH = 1 - Math.exp(-SAMPLE_INTERVAL / 0.5);
+const CHART_POLISH = 1 - Math.exp(-SAMPLE_INTERVAL / 0.3);
 const SMOOTHING = 1 - Math.exp(-SAMPLE_INTERVAL / 0.6);
 const smooth = (shown: number, reading: number) => shown + (reading - shown) * SMOOTHING;
 const SETTLE_TICKS = 6;
@@ -207,7 +206,7 @@ interface Outcome {
   settledLoadedLatency: Promise<number | null>
 }
 
-type Progress = (live: number, marker: number | null, loaded: number | null, samples: number[], bytes: number) => void;
+type Progress = (reading: Throughput) => void;
 
 /** Runs the pumps until the stability rule fires, sampling throughput and pinging under load. */
 async function measure(pumps: readonly Pump[], pingTarget: string, signal: AbortSignal, onProgress: Progress): Promise<Outcome> {
@@ -278,7 +277,7 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
     trend.push(chartLine);
     const rate = sustained(samples);
     marker = marker === 0 ? rate : smooth(marker, rate);
-    onProgress(chartLine, marker > 0 ? marker : null, shownLoaded, [...trend], bytes);
+    onProgress({ speed: chartLine, sustained: marker > 0 ? marker : null, latency: shownLoaded, trend: [...trend], bytes });
     if (shouldStop(estimates)) break;
   }
 
@@ -292,7 +291,7 @@ async function measure(pumps: readonly Pump[], pingTarget: string, signal: Abort
   for (let tick = 1; tick <= SETTLE_TICKS && !signal.aborted; tick++) {
     await wait(SAMPLE_INTERVAL * 1000);
     shown = tick === SETTLE_TICKS ? mbps : shown + (mbps - shown) * SETTLE_SMOOTHING;
-    onProgress(shown, mbps, shownLoaded, [...trend], bytes);
+    onProgress({ speed: shown, sustained: mbps, latency: shownLoaded, trend: [...trend], bytes });
   }
 
   const loadedLatency = () => (loadedPings.length > 0 ? median(loadedPings.slice(-LOADED_POINTS)) : null);
@@ -326,9 +325,9 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
   while (pings.length < LATENCY_PINGS_MAX && (pings.length < LATENCY_PINGS_MIN || performance.now() < budgetEnds)) {
     const ms = await ping(target.ping, signal);
     pings.push(ms);
-    publish({ phase: 'latency', live: ms });
+    publish({ phase: 'latency', latency: ms });
   }
-  publish({ results: { ...state.results, latency: median(pings), jitter: meanAbsoluteDelta(pings) } });
+  publish({ latency: median(pings), jitter: meanAbsoluteDelta(pings) });
 
   const downloadPumps: Pump[] = [];
   const objects = mode === 'multi' ? target.download : target.download.slice(0, 1);
@@ -337,17 +336,10 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
       downloadPumps.push((phaseSignal, meter) => pump(objects[h], phaseSignal, meter));
     }
   }
-  const download = await measure(downloadPumps, target.ping, signal, (live, marker, loaded, samples, bytes) => {
-    publish({
-      phase: 'download',
-      live,
-      marker,
-      loaded,
-      trend: { ...state.trend, download: samples },
-      traffic: { ...state.traffic, download: bytes }
-    });
+  const download = await measure(downloadPumps, target.ping, signal, (reading) => {
+    publish({ phase: 'download', download: reading });
   });
-  publish({ results: { ...state.results, download: download.mbps, downloadLatency: download.loadedLatency } });
+  publish({ download: { ...state.download, speed: download.mbps, sustained: download.mbps, latency: download.loadedLatency } });
 
   let upload: Outcome | null = null;
   if (target.upload.length > 0) {
@@ -356,25 +348,14 @@ export async function runSpeedtest(mode: ThreadMode, target: Target, signal: Abo
     for (let i = 0, count = mode === 'multi' ? UPLOAD_STREAMS : 1; i < count; i++) {
       uploadPumps.push((phaseSignal, meter) => push(sinks[i % sinks.length], phaseSignal, meter));
     }
-    upload = await measure(uploadPumps, target.ping, signal, (live, marker, loaded, samples, bytes) => {
-      publish({
-        phase: 'upload',
-        live,
-        marker,
-        loaded,
-        trend: { ...state.trend, upload: samples },
-        traffic: { ...state.traffic, upload: bytes }
-      });
+    upload = await measure(uploadPumps, target.ping, signal, (reading) => {
+      publish({ phase: 'upload', upload: reading });
     });
+    publish({ upload: { ...state.upload, speed: upload.mbps, sustained: upload.mbps, latency: upload.loadedLatency } });
   }
-  publish({
-    phase: 'done',
-    live: 0,
-    loaded: null,
-    results: { ...state.results, upload: upload?.mbps ?? null, uploadLatency: upload?.loadedLatency ?? null }
-  });
+  publish({ phase: 'done' });
 
   // A loaded ping may still be in flight for either phase; the medians are refined once it lands.
   const [downloadLatency, uploadLatency] = await Promise.all([download.settledLoadedLatency, upload?.settledLoadedLatency ?? null]);
-  publish({ results: { ...state.results, downloadLatency, uploadLatency } });
+  publish({ download: { ...state.download, latency: downloadLatency }, upload: { ...state.upload, latency: uploadLatency } });
 }

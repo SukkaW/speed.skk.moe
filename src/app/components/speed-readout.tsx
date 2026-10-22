@@ -41,18 +41,16 @@ const styles = stylex.create({
 
 /** Headline speed and trend of one direction: live while its phase runs, the result afterwards. */
 export function SpeedReadout({ direction }: { direction: 'download' | 'upload' }) {
-  const { phase, live, marker, results, trend } = useSpeedtestState();
-  const value = phase === direction ? live : results[direction];
-  const samples = trend[direction];
-  const speed = value == null ? null : splitUnit(prettyBandwidth(value * 1e6, { locale: 'en-US', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const { speed, sustained, trend } = useSpeedtestState()[direction];
+  const figure = speed == null ? null : splitUnit(prettyBandwidth(speed * 1e6, { locale: 'en-US', minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   return (
     <>
-      <p {...stylex.props(styles.panelValue, speed === null && styles.empty)}>
-        {speed?.value ?? '—'}
-        <span {...stylex.props(styles.panelUnit)}>{speed?.unit ?? 'Mbps'}</span>
+      <p {...stylex.props(styles.panelValue, figure === null && styles.empty)}>
+        {figure?.value ?? '—'}
+        <span {...stylex.props(styles.panelUnit)}>{figure?.unit ?? 'Mbps'}</span>
       </p>
       <div {...stylex.props(styles.panelChart)}>
-        <TrendChart samples={samples} capacity={Math.max(samples.length, TREND_SAMPLES)} marker={phase === direction ? marker : results[direction]} markerLabel="Sustained" tone={direction} />
+        <TrendChart samples={trend} capacity={Math.max(trend.length, TREND_SAMPLES)} marker={sustained} markerLabel="Sustained" tone={direction} />
       </div>
     </>
   );

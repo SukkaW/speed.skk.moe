@@ -45,20 +45,20 @@ function formatOrDash(value: number | null, format: Intl.NumberFormat) {
 export type StatKey = 'latency' | 'jitter' | 'downloadLatency' | 'uploadLatency' | 'downloaded' | 'uploaded';
 
 /** Live reading while its phase runs, the settled result otherwise. */
-function read(stat: StatKey, { phase, live, loaded, results, traffic }: SpeedtestState): { value: string | null, unit: string } {
+function read(stat: StatKey, { latency, jitter, download, upload }: SpeedtestState): { value: string | null, unit: string } {
   switch (stat) {
     case 'latency':
-      return { value: formatOrDash(phase === 'latency' ? live : results.latency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(latency, wholeNumber), unit: 'ms' };
     case 'jitter':
-      return { value: formatOrDash(results.jitter, oneDecimal), unit: 'ms' };
+      return { value: formatOrDash(jitter, oneDecimal), unit: 'ms' };
     case 'downloadLatency':
-      return { value: formatOrDash(phase === 'download' ? loaded : results.downloadLatency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(download.latency, wholeNumber), unit: 'ms' };
     case 'uploadLatency':
-      return { value: formatOrDash(phase === 'upload' ? loaded : results.uploadLatency, wholeNumber), unit: 'ms' };
+      return { value: formatOrDash(upload.latency, wholeNumber), unit: 'ms' };
     case 'downloaded':
-      return splitUnit(prettyTraffic(traffic.download));
+      return splitUnit(prettyTraffic(download.bytes));
     case 'uploaded':
-      return splitUnit(prettyTraffic(traffic.upload));
+      return splitUnit(prettyTraffic(upload.bytes));
     // no default
   }
 }
