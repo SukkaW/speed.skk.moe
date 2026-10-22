@@ -3,7 +3,6 @@
 import { createContextState } from 'foxact/context-state';
 import { IDLE } from '@/lib/engine';
 import type { SpeedtestState, ThreadMode } from '@/lib/engine';
-import type { Target } from '@/lib/targets';
 
 // Destructured bindings are re-exported by name below: Next only turns plain named exports of a
 // client module into client references, so `export const [A, B] = …` reaches a server component as undefined.
@@ -18,8 +17,8 @@ export function useRunning() {
 
 const [ModeProvider, useMode, useSetMode] = createContextState<ThreadMode>('multi');
 
-/** A region picked by hand; null follows the geo lookup. */
-const [ChoiceProvider, useChoice, useSetChoice] = createContextState<Target | null>(null);
+/** Index of a region picked by hand; null follows the geo lookup. */
+const [ChoiceProvider, useChoice, useSetChoice] = createContextState<number | null>(null);
 
 /** Screenshot mode: personal details are masked and the location drops to the country. */
 const [RedactedProvider, useRedacted, useSetRedacted] = createContextState(false);

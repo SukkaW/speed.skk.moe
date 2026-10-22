@@ -4,7 +4,7 @@ import * as stylex from '@stylexjs/stylex';
 import { Menu } from '@base-ui/react/menu';
 import { menuStyles } from '../../styles/menu.stylex';
 import { useRunning, useSetChoice } from '@/context/speedtest';
-import { useTarget } from '@/hooks/use-target';
+import { useTargetIndex } from '@/hooks/use-target';
 import type { Target } from '@/lib/targets';
 import { bp } from '../../styles/breakpoints.stylex';
 import { colors } from '../../styles/tokens.stylex';
@@ -31,13 +31,10 @@ interface RegionMenuClientProps {
 }
 
 export function RegionMenuClient({ targets, triggerIconSlot, checkSlot }: RegionMenuClientProps) {
-  const value = useTarget(targets);
+  const index = useTargetIndex(targets);
+  const value = targets[index];
   const setChoice = useSetChoice();
   const running = useRunning();
-  const pick = (name: unknown) => {
-    const next = targets.find((target) => target.name === name);
-    if (next) setChoice(next);
-  };
 
   return (
     <Menu.Root modal={false}>
@@ -53,9 +50,9 @@ export function RegionMenuClient({ targets, triggerIconSlot, checkSlot }: Region
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={8} {...stylex.props(menuStyles.positioner)}>
           <Menu.Popup {...stylex.props(menuStyles.popup)}>
-            <Menu.RadioGroup value={value.name} onValueChange={pick}>
-              {targets.map((target) => (
-                <Menu.RadioItem key={target.name} value={target.name} closeOnClick {...stylex.props(menuStyles.item)}>
+            <Menu.RadioGroup value={index} onValueChange={setChoice}>
+              {targets.map((target, i) => (
+                <Menu.RadioItem key={target.name} value={i} closeOnClick {...stylex.props(menuStyles.item)}>
                   <span>
                     {target.name}
                     {target.upload.length === 0 && <span {...stylex.props(styles.note)}>Upload not supported</span>}
