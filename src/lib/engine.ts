@@ -55,7 +55,7 @@ const UPLOAD_TARGET = 1;
 const LATENCY_PINGS_MIN = 8;
 const LATENCY_PINGS_MAX = 20;
 /** ms. */
-const LATENCY_BUDGET = 2000;
+export const LATENCY_BUDGET = 2000;
 /** ms between pings while the link is saturated. */
 const LOADED_PING_INTERVAL = 400;
 /** Most recent loaded pings that form the loaded-latency result. */
