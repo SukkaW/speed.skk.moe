@@ -11,18 +11,14 @@ import { colors, fonts } from '../../styles/tokens.stylex';
 const styles = stylex.create({
   statValue: {
     display: 'block',
-    marginTop: { default: 6, [bp.mobile]: 4, [bp.large]: 10 },
+    marginTop: 4,
     fontFamily: fonts.condensed,
-    fontSize: { default: 32, [bp.mobile]: 28, [bp.large]: 44 },
+    fontSize: { default: 26, [bp.mobile]: 24, [bp.large]: 28 },
     fontWeight: 500,
     lineHeight: 1,
     letterSpacing: '-0.01em',
     fontVariantNumeric: 'tabular-nums',
     color: colors.ink
-  },
-  statValueCompact: {
-    marginTop: 4,
-    fontSize: { default: 26, [bp.mobile]: 24, [bp.large]: 28 }
   },
   statUnit: {
     marginLeft: 6,
@@ -64,14 +60,13 @@ function useStat(stat: StatKey): { value: string | null, unit: string } {
 }
 
 interface StatValueProps {
-  stat: StatKey,
-  compact?: boolean
+  stat: StatKey
 }
 
-export function StatValue({ stat, compact }: StatValueProps) {
+export function StatValue({ stat }: StatValueProps) {
   const { value, unit } = useStat(stat);
   return (
-    <dd {...stylex.props(styles.statValue, compact && styles.statValueCompact, value == null && styles.empty)}>
+    <dd {...stylex.props(styles.statValue, value == null && styles.empty)}>
       {value ?? '—'}
       <span {...stylex.props(styles.statUnit)}>{unit}</span>
     </dd>

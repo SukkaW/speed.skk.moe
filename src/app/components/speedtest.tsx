@@ -94,14 +94,10 @@ const styles = stylex.create({
     gap: { default: 12, [bp.mobile]: 10, [bp.large]: 16 }
   },
   stat: {
-    padding: { default: 16, [bp.mobile]: 12, [bp.large]: 24 },
-    borderRadius: { default: 16, [bp.large]: 20 },
-    backgroundColor: colors.raised
-  },
-  statCompact: {
     paddingBlock: { default: 10, [bp.large]: 14 },
     paddingInline: { default: 14, [bp.mobile]: 12, [bp.large]: 16 },
-    borderRadius: 16
+    borderRadius: 16,
+    backgroundColor: colors.raised
   },
   statFill: { height: '100%' },
   infoCard: {
@@ -222,15 +218,15 @@ export function Speedtest({ targets }: SpeedtestProps) {
               runningSlot={<><SquareIcon size={14} strokeWidth={2} fill="currentColor" aria-hidden />Stop</>}
               doneSlot={<><RotateCwIcon size={16} strokeWidth={2} aria-hidden />Test again</>}
             />
-            <div {...stylex.props(styles.stat, styles.statCompact)}>
+            <div {...stylex.props(styles.stat)}>
               <div {...stylex.props(styles.label)}>Connections</div>
               <Connections />
             </div>
             <dl>
-              <Stat compact label="Latency" stat="latency" />
+              <Stat label="Latency" stat="latency" />
             </dl>
             <dl>
-              <Stat compact label="Jitter" stat="jitter" />
+              <Stat label="Jitter" stat="jitter" />
             </dl>
           </div>
         </header>
@@ -296,15 +292,14 @@ function Panel({ direction, label }: { direction: 'download' | 'upload', label: 
 
 interface StatProps {
   label: string,
-  stat: StatKey,
-  compact?: boolean
+  stat: StatKey
 }
 
-function Stat({ label, stat, compact }: StatProps) {
+function Stat({ label, stat }: StatProps) {
   return (
-    <div {...stylex.props(styles.stat, compact && styles.statCompact, compact && styles.statFill)}>
+    <div {...stylex.props(styles.stat, styles.statFill)}>
       <dt {...stylex.props(styles.label)}>{label}</dt>
-      <StatValue stat={stat} compact={compact} />
+      <StatValue stat={stat} />
     </div>
   );
 }
